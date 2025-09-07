@@ -3,64 +3,7 @@ import Logger from "$pkg/logger";
 import { ulid } from "ulid";
 import { BIDANG_MINAT, TYPE_MATKUL } from "@prisma/client";
 import bcrypt from "bcrypt";
-
-/**
- * Validate schedule data before creation/update
- */
-export async function validateScheduleData(
-    schedule: any
-): Promise<{ isValid: boolean; errors: string[] }> {
-    const errors: string[] = [];
-
-    // Check if matakuliah exists
-    const matakuliah = await prisma.matakuliah.findUnique({
-        where: { id: schedule.matakuliahId },
-    });
-    if (!matakuliah) {
-        errors.push("Matakuliah not found");
-    }
-
-    // Check if ruangan exists and is active
-    const ruangan = await prisma.ruanganLaboratorium.findUnique({
-        where: { id: schedule.ruanganId },
-    });
-    if (!ruangan || !ruangan.isActive) {
-        errors.push("Room not found or inactive");
-    }
-
-    // Check if shift exists and is active
-    const shift = await prisma.shift.findUnique({
-        where: { id: schedule.shiftId },
-    });
-    if (!shift || !shift.isActive) {
-        errors.push("Shift not found or inactive");
-    }
-
-    // Check if dosen exist (if provided)
-    if (schedule.dosenIds && schedule.dosenIds.length > 0) {
-        const dosenCount = await prisma.dosen.count({
-            where: {
-                id: {
-                    in: schedule.dosenIds,
-                },
-            },
-        });
-        if (dosenCount !== schedule.dosenIds.length) {
-            errors.push("One or more dosen not found");
-        }
-    }
-
-    // Validate day
-    const validDays = ["SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU"];
-    if (!validDays.includes(schedule.hari)) {
-        errors.push("Invalid day");
-    }
-
-    return {
-        isValid: errors.length === 0,
-        errors,
-    };
-}
+import { namaToEmail } from "$utils/strings.utils";
 
 /**
  * Helper function to find or create Matakuliah
@@ -72,7 +15,7 @@ export async function findOrCreateMatakuliah(
 ): Promise<{ matakuliah: any; isNew: boolean }> {
     try {
         // Try to find existing matakuliah by kode
-        let matakuliah = await prisma.matakuliah.findFirst({
+        let matakuliah = await prisma.matakuliah.findUnique({
             where: {
                 kode: kode.trim(),
             },
@@ -110,112 +53,65 @@ export async function findOrCreateMatakuliah(
  */
 export async function findOrCreateDosen(
     nama: string,
-    nip?: string
+    nip: string
 ): Promise<{ dosen: any; isNew: boolean }> {
     try {
-        let dosen;
+        // Find User Level for DOSEN
+        const lectureRole = await prisma.userLevels.findFirst({
+            where: {
+                name: "DOSEN",
+            },
+        });
 
-        // If NIP is provided, try to find by NIP first
-        if (nip) {
-            dosen = await prisma.dosen.findUnique({
-                where: {
-                    nip: nip,
-                },
-            });
+        if (!lectureRole) {
+            throw new Error("DOSEN user level not found");
         }
 
-        // If not found by NIP, try to find by name
-        if (!dosen) {
-            dosen = await prisma.dosen.findFirst({
-                where: {
-                    nama: {
-                        contains: nama.split(",")[0].trim(),
+        const hashedPassword = await bcrypt.hash("dosen123", 12);
+
+        // Check Dosen Exist or not
+        const lectureExists = await prisma.dosen.findFirst({
+            where: {
+                OR: [
+                    {
+                        nama: { contains: nama },
                     },
+                    {
+                        nip,
+                    },
+                ],
+            },
+        });
+
+        if (lectureExists) {
+            const response = await prisma.dosen.update({
+                where: { id: lectureExists.id },
+                data: {
+                    nama,
+                    nip,
+                    email: namaToEmail(nama),
+                    password: hashedPassword,
+                    bidangMinat: BIDANG_MINAT.UMUM,
+                    userLevelId: lectureRole.id,
                 },
             });
 
-            // If found by name but NIP is provided, update the NIP
-            if (dosen && nip && dosen.nip !== nip) {
-                try {
-                    dosen = await prisma.dosen.update({
-                        where: { id: dosen.id },
-                        data: { nip: nip },
-                    });
-                    Logger.info(
-                        `Updated NIP for dosen ${dosen.nama} to ${nip}`
-                    );
-                } catch (updateError) {
-                    Logger.error(
-                        `Failed to update NIP for dosen: ${updateError}`
-                    );
-                }
-            }
-        }
-
-        // If still not found, create new dosen
-        if (!dosen) {
-            const userLevel = await prisma.userLevels.findFirst({
-                where: { name: "DOSEN" },
-            });
-
-            if (!userLevel) {
-                throw new Error("DOSEN user level not found");
-            }
-
-            // Generate email from name
-            const cleanName = nama
-                .split(",")[0]
-                .trim()
-                .toLowerCase()
-                .replace(/\s+/g, "");
-            const baseEmail = `${cleanName}@gmail.com`;
-
-            // Check if email already exists and make it unique
-            let email = baseEmail;
-            let counter = 1;
-            while (await prisma.dosen.findFirst({ where: { email } })) {
-                email = `${cleanName}${counter}@gmail.com`;
-                counter++;
-            }
-
-            // Generate unique NIP if not provided
-            let finalNip = nip;
-            if (!finalNip) {
-                // Generate NIP based on current year + random number
-                const currentYear = new Date().getFullYear();
-                let generatedNip;
-                let nipExists = true;
-
-                while (nipExists) {
-                    const randomNum = Math.floor(Math.random() * 10000)
-                        .toString()
-                        .padStart(4, "0");
-                    generatedNip = `${currentYear}${randomNum}`;
-                    nipExists =
-                        (await prisma.dosen.findFirst({
-                            where: { nip: generatedNip },
-                        })) !== null;
-                }
-                finalNip = generatedNip;
-            }
-
-            dosen = await prisma.dosen.create({
+            return { dosen: response, isNew: false };
+        } else {
+            const response = await prisma.dosen.create({
                 data: {
                     id: ulid(),
-                    nama: nama.trim(),
-                    nip: finalNip || "",
-                    email: email,
-                    password: await bcrypt.hash(cleanName, 10),
+                    nama,
+                    nip,
+                    email: namaToEmail(nama),
+                    password: hashedPassword,
                     bidangMinat: BIDANG_MINAT.UMUM,
-                    userLevelId: userLevel.id,
+                    userLevelId: lectureRole.id,
                 },
             });
 
-            Logger.info(`Created new dosen: ${nama} with NIP: ${finalNip}`);
-            return { dosen, isNew: true };
+            return { dosen: response, isNew: true };
         }
-
-        return { dosen, isNew: false };
     } catch (error) {
         Logger.error(`Error in findOrCreateDosen: ${error}`);
         throw error;
@@ -246,8 +142,8 @@ export async function findOrCreateRuangan(
                     id: ulid(),
                     nama: nama.trim(),
                     lokasi: lokasi,
-                    kapasitas: 30, // Default capacity
-                    isLab: nama.toLowerCase().includes("lab"), // Auto-detect if it's a lab
+                    kapasitas: 30,
+                    isLab: nama.toLowerCase().includes("lab"),
                     isActive: true,
                 },
             });

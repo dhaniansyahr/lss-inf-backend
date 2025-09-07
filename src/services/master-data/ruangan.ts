@@ -18,20 +18,6 @@ export async function create(
     data: RuanganDTO
 ): Promise<ServiceResponse<CreateResponse>> {
     try {
-        // const existingRoom = await prisma.ruanganLaboratorium.findFirst({
-        //     where: {
-        //         nama: data.nama,
-        //         isActive: true,
-        //     },
-        //     select: { id: true },
-        // });
-
-        // if (existingRoom) {
-        //     return BadRequestWithMessage(
-        //         "Ruangan dengan nama tersebut sudah ada"
-        //     );
-        // }
-
         const ruanganLaboratorium = await prisma.ruanganLaboratorium.create({
             data: {
                 id: ulid(),

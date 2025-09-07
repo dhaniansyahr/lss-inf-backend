@@ -27,6 +27,7 @@ import {
 } from "./helpers/jadwal";
 import { DateTime } from "luxon";
 import { DAYS, geneticAlgorithm } from "./genetic-service";
+import { generateNipDosen } from "$utils/strings.utils";
 
 async function checkScheduleHasConflict(
     schedule: JadwalDTO
@@ -465,7 +466,9 @@ export async function bulkUploadTheory(file: File) {
                 const dosenName = coordinatorKelasName
                     ? coordinatorKelasName[1].trim().replace(/,\s*$/, "")
                     : coordinatorKelas;
-                const dosenNip = coordinatorKelasNip ? coordinatorKelasNip : "";
+                const dosenNip = coordinatorKelasNip
+                    ? coordinatorKelasNip
+                    : generateNipDosen();
 
                 const { dosen } = await findOrCreateDosen(dosenName, dosenNip);
 
