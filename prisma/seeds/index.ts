@@ -5,16 +5,17 @@ import { seedUsers } from "./seedUser";
 import { seedShift } from "./seedShift";
 import { seedRuanganLab } from "./seedRuangan";
 import { seedDosen } from "./seedDosen";
+import { seedAcl } from "./seedAcl";
 
 async function seed() {
     await seedUserLevels(prisma);
     await seedUsers(prisma);
+    await seedAcl(prisma);
     await seedShift(prisma);
     await seedDosen(prisma);
     await seedRuanganLab(prisma);
 
     // await seedRuangan(prisma);
-    // await seedAcl(prisma);
     // await seedMataKuliah(prisma);
     // await seedJadwal(prisma);
     // await seedMahasiswa(prisma);

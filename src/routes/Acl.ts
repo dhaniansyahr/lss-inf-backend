@@ -5,6 +5,8 @@ import * as AclValidation from "$validations/AclValidation";
 
 const AclRoutes = new Hono();
 
+AclRoutes.get("/", AuthMiddleware.checkJwt, AclController.getAccess);
+
 AclRoutes.get(
     "/features",
     AuthMiddleware.checkJwt,
@@ -31,12 +33,6 @@ AclRoutes.put(
     AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "update"),
     AclValidation.validateUpdateAcl,
     AclController.update
-);
-
-AclRoutes.get(
-    "/:featureName",
-    AuthMiddleware.checkJwt,
-    AclController.getAccess
 );
 
 export default AclRoutes;

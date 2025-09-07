@@ -406,9 +406,27 @@ export async function getAccess(
 
         if (!aclExists) return INVALID_ID_SERVICE_RESPONSE;
 
+        const actions = await prisma.actions.findMany({
+            select: {
+                name: true,
+            },
+        });
+
+        if (!actions) return BadRequestWithMessage("Actions Tidak Ditemukan!");
+
+        // Format the response to have actions as boolean values
+        const actionNames = featureExists.actions.map((action) => action.name);
+        const formattedActions = actions.reduce((acc, action) => {
+            acc[action.name] = actionNames.includes(action.name);
+            return acc;
+        }, {} as Record<string, boolean>);
+
         return {
             status: true,
-            data: aclExists,
+            data: {
+                featureName: featureName,
+                actions: formattedActions,
+            },
         };
     } catch (err) {
         Logger.error(`AclService.getAccess : ${err}`);

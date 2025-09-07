@@ -72,7 +72,7 @@ export async function getAllFeatures(c: Context): Promise<TypedResponse> {
 
 export async function getAccess(c: Context) {
     const user: UserJWTDAO = await c.get("jwtPayload");
-    const featureName = c.req.param("featureName");
+    const featureName = c.req.query("featureName") as string;
 
     const serviceResponse = await AclService.getAccess(user, featureName);
 
