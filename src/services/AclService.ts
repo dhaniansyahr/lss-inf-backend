@@ -119,15 +119,30 @@ export async function getAclByUserLevelId(
             where: {
                 userLevelId,
             },
+            include: {
+                feature: {
+                    include: {
+                        actions: {
+                            select: {
+                                name: true,
+                            },
+                        },
+                    },
+                },
+            },
         });
 
         if (!acl) return INVALID_ID_SERVICE_RESPONSE;
 
+        console.log("ACL : ", acl);
+
         const formattedAcl = acl.reduce((acc: any, current: any) => {
-            if (!acc[current.namaFeature]) {
-                acc[current.namaFeature] = {};
+            if (!acc[current.feature.name]) {
+                acc[current.feature.name] = {};
             }
-            acc[current.namaFeature][current.namaAction] = true;
+            current.feature.actions.forEach((action: any) => {
+                acc[current.feature.name][action.name] = true;
+            });
             return acc;
         }, {});
 
