@@ -19,6 +19,24 @@ JadwalRoutes.post(
     JadwalController.create
 );
 
+JadwalRoutes.get(
+    "/check",
+    AuthMiddleware.checkJwt,
+    JadwalController.checkTheoryScheduleExists
+);
+
+JadwalRoutes.post(
+    "/bulk-upload",
+    AuthMiddleware.checkJwt,
+    JadwalController.bulkUploadTheorySchedule
+);
+
+JadwalRoutes.post(
+    "/generate",
+    AuthMiddleware.checkJwt,
+    JadwalController.generateSchedule
+);
+
 JadwalRoutes.get("/:id", AuthMiddleware.checkJwt, JadwalController.getById);
 
 JadwalRoutes.put(
@@ -30,30 +48,11 @@ JadwalRoutes.put(
 
 JadwalRoutes.delete("/", AuthMiddleware.checkJwt, JadwalController.deleteAll);
 
-JadwalRoutes.get(
-    "/check",
-    AuthMiddleware.checkJwt,
-    JadwalController.checkTheoryScheduleExists
-);
-
 JadwalRoutes.put(
     "/:id/meeting",
     AuthMiddleware.checkJwt,
     JadwalValidation.validateUpdateMeeting,
     JadwalController.updateMeeting
-);
-
-JadwalRoutes.post(
-    "/bulk-upload",
-    AuthMiddleware.checkJwt,
-    JadwalController.bulkUploadTheorySchedule
-);
-
-// Generate Jadwal
-JadwalRoutes.post(
-    "/generate",
-    AuthMiddleware.checkJwt,
-    JadwalController.generateSchedule
 );
 
 export default JadwalRoutes;
