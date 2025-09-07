@@ -33,4 +33,10 @@ AclRoutes.put(
     AclController.update
 );
 
+AclRoutes.get(
+    "/:featureName",
+    AuthMiddleware.checkJwt,
+    AclController.getAccess
+);
+
 export default AclRoutes;

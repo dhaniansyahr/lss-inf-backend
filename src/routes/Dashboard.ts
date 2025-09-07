@@ -5,9 +5,9 @@ import * as AuthMiddleware from "$middlewares/authMiddleware";
 const DashboardRoutes = new Hono();
 
 DashboardRoutes.get(
-    "/",
+    "/summary-card",
     AuthMiddleware.checkJwt,
-    DashboardController.getDashboardData
+    DashboardController.getSummaryCard
 );
 
 export default DashboardRoutes;

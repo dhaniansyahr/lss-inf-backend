@@ -5,39 +5,51 @@ import path from "path";
 import { ulid } from "ulid";
 
 export async function ensureDirectoryExists(dirPath: string): Promise<void> {
-        if (!existsSync(dirPath)) {
-                await mkdir(dirPath, { recursive: true });
-        }
+    if (!existsSync(dirPath)) {
+        await mkdir(dirPath, { recursive: true });
+    }
 }
 
 // Helper function to get file extension
 export function getFileExtension(filename: string): string {
-        return path.extname(filename).toLowerCase();
+    return path.extname(filename).toLowerCase();
 }
 
 // Helper function to generate unique filename
 export function generateUniqueFilename(originalName: string): string {
-        const ext = getFileExtension(originalName);
-        const nameWithoutExt = path.basename(originalName, ext);
+    const ext = getFileExtension(originalName);
+    const nameWithoutExt = path.basename(originalName, ext);
 
-        return `${nameWithoutExt}_${ulid()}${ext}`;
+    return `${nameWithoutExt}_${ulid()}${ext}`;
 }
 
 export function getBaseUrl(c: Context): string {
-        const url = new URL(c.req.url);
-        return `${url.protocol}//${url.host}`;
+    const url = new URL(c.req.url);
+    return `${url.protocol}//${url.host}`;
 }
 
 export function getContentType(ext: string | undefined): string {
-        const types: Record<string, string> = {
-                pdf: "application/pdf",
-                jpg: "image/jpeg",
-                jpeg: "image/jpeg",
-                png: "image/png",
-                gif: "image/gif",
-                txt: "text/plain",
-                doc: "application/msword",
-                docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        };
-        return types[ext || ""] || "application/octet-stream";
+    const types: Record<string, string> = {
+        pdf: "application/pdf",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        png: "image/png",
+        gif: "image/gif",
+        txt: "text/plain",
+        doc: "application/msword",
+        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    };
+    return types[ext || ""] || "application/octet-stream";
+}
+
+export async function readExcelFile<T>(file: File): Promise<T[]> {
+    const XLSX = await import("xlsx");
+    const arrayBuffer = await file.arrayBuffer();
+    const workbook = XLSX.read(new Uint8Array(arrayBuffer), {
+        type: "array",
+    });
+
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    return XLSX.utils.sheet_to_json<T>(worksheet);
 }

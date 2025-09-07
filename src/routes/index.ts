@@ -24,8 +24,6 @@ router.get("/example/buffer/pdf", ExampleBufferController.getPDF);
 router.route("/users", RoutesRegistry.UserRoutes);
 
 router.route("/master-data", RoutesRegistry.MasterDataRoutes);
-router.route("/shifts", RoutesRegistry.ShiftRoutes);
-router.route("/ruangan-laboratorium", RoutesRegistry.RuanganLaboratoriumRoutes);
 
 router.route("/jadwal", RoutesRegistry.JadwalRoutes);
 

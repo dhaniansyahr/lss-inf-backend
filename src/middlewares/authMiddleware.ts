@@ -1,5 +1,9 @@
 import jwt from "jsonwebtoken";
-import { response_forbidden, response_internal_server_error, response_unauthorized } from "$utils/response.utils";
+import {
+    response_forbidden,
+    response_internal_server_error,
+    response_unauthorized,
+} from "$utils/response.utils";
 import { Context, Next } from "hono";
 import { UserJWTDAO } from "$entities/User";
 import { prisma } from "$utils/prisma.utils";
@@ -25,11 +29,37 @@ export function checkAccess(featureName: string, action: string) {
     return async (c: Context, next: Next) => {
         const user: UserJWTDAO = await c.get("jwtPayload");
 
+        // First, get the feature ID from the feature name
+        const feature = await prisma.features.findUnique({
+            where: { name: featureName },
+            select: { id: true },
+        });
+
+        if (!feature) {
+            return response_forbidden(c, "Feature not found!");
+        }
+
+        // Then, get the action ID from the action name and feature ID
+        const actionRecord = await prisma.actions.findUnique({
+            where: {
+                featureId_name: {
+                    featureId: feature.id,
+                    name: action,
+                },
+            },
+            select: { id: true },
+        });
+
+        if (!actionRecord) {
+            return response_forbidden(c, "Action not found for this feature!");
+        }
+
+        // Now check if the user has access using the IDs
         const mappingExist = await prisma.acl.findUnique({
             where: {
-                namaFeature_namaAction_userLevelId: {
-                    namaAction: action,
-                    namaFeature: featureName,
+                featureId_actionId_userLevelId: {
+                    actionId: actionRecord.id,
+                    featureId: feature.id,
                     userLevelId: user.userLevelId,
                 },
             },
@@ -39,7 +69,10 @@ export function checkAccess(featureName: string, action: string) {
             if (mappingExist) {
                 await next();
             } else {
-                return response_forbidden(c, "You don't have access to this feature!");
+                return response_forbidden(
+                    c,
+                    "You don't have access to this feature!"
+                );
             }
         } catch (err) {
             return response_internal_server_error(c, (err as Error).message);

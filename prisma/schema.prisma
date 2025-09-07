@@ -1,7 +1,6 @@
 // This is your Prisma schema file,
 
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,6 +11,7 @@ datasource db {
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
+// Enums
 enum TYPE_MATKUL {
   WAJIB
   PILIHAN
@@ -41,6 +41,21 @@ enum BIDANG_MINAT {
   UMUM
 }
 
+enum SEMESTER {
+  GANJIL
+  GENAP
+}
+
+enum HARI {
+  SENIN
+  SELASA
+  RABU
+  KAMIS
+  JUMAT
+  SABTU
+}
+
+// Core User Management
 model User {
   id          String   @id
   fullName    String
@@ -54,17 +69,18 @@ model User {
 }
 
 model UserLevels {
-  id         String       @id
-  name       String       @unique
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-  users      User[]
-  acl        Acl[]
-  Dosen      Dosen[]
-  AsistenLab AsistenLab[]
-  Mahasiswa  Mahasiswa[]
+  id        String   @id
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  acl       Acl[]
+  dosen     Dosen[]
+  mahasiswa Mahasiswa[]
 }
 
+// ACL System
 model Features {
   id        String   @id
   name      String   @unique
@@ -76,55 +92,47 @@ model Features {
 }
 
 model Actions {
-  id          String   @id
-  name        String
-  namaFeature String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id
+  name      String
+  featureId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  feature Features @relation(fields: [namaFeature], references: [name])
+  feature Features @relation(fields: [featureId], references: [id])
 
-  @@unique([namaFeature, name])
+  @@unique([featureId, name])
 }
 
 model Acl {
   id          String   @id
-  namaFeature String
-  namaAction  String
+  featureId   String
+  actionId    String
   userLevelId String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  feature   Features   @relation(fields: [namaFeature], references: [name])
+  feature   Features   @relation(fields: [featureId], references: [id])
   userLevel UserLevels @relation(fields: [userLevelId], references: [id])
 
-  @@unique([namaFeature, namaAction, userLevelId])
+  @@unique([featureId, actionId, userLevelId])
 }
 
-model DosenPengampuMK {
-  id           String     @id
-  dosenId      String
-  matakuliahId String
-  dosen        Dosen?     @relation(fields: [dosenId], references: [id])
-  matakuliah   Matakuliah @relation(fields: [matakuliahId], references: [id])
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-}
-
+// Academic Entities
 model Matakuliah {
-  id                    String                  @id
-  nama                  String
-  kode                  String                  @unique
-  type                  TYPE_MATKUL
-  sks                   Int
-  bidangMinat           BIDANG_MINAT
-  isTeori               Boolean                 @default(false)
-  semester              Int
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-  dosenPengampuMK       DosenPengampuMK[]
+  id          String       @id
+  nama        String
+  kode        String       @unique
+  type        TYPE_MATKUL
+  sks         Int
+  bidangMinat BIDANG_MINAT
+  isTeori     Boolean      @default(false)
+  semester    Int
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  dosenPengampu         DosenPengampuMK[]
   jadwal                Jadwal[]
-  PendaftaranAsistenLab PendaftaranAsistenLab[]
+  pendaftaranAsistenLab PendaftaranAsistenLab[]
 }
 
 model Dosen {
@@ -138,47 +146,10 @@ model Dosen {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  userLevel UserLevels @relation(fields: [userLevelId], references: [id])
-
-  dosenPengampuMK DosenPengampuMK[]
-  jadwalDosen     Jadwal[]
-  absensi         Absensi[]
-}
-
-model AsistenLab {
-  id          String    @id
-  mahasiswaId String
-  jadwalId    String
-  semester    Int
-  tahun       String
-  userLevelId String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
-
-  userLevel UserLevels @relation(fields: [userLevelId], references: [id])
-
-  Mahasiswa Mahasiswa[]
-  Jadwal    Jadwal[]
-}
-
-model PendaftaranAsistenLab {
-  id             String             @id
-  mahasiswaId    String
-  jadwalId       String
-  nilaiTeori     NILAI_MATAKULIAH
-  nilaiPraktikum NILAI_MATAKULIAH
-  nilaiAkhir     NILAI_MATAKULIAH
-  status         ASISTEN_LAB_STATUS @default(PENDING)
-  keterangan     String?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-
-  mahasiswa Mahasiswa @relation(fields: [mahasiswaId], references: [id])
-  jadwal    Jadwal    @relation(fields: [jadwalId], references: [id])
-
-  Matakuliah   Matakuliah? @relation(fields: [matakuliahId], references: [id])
-  matakuliahId String?
+  userLevel     UserLevels        @relation(fields: [userLevelId], references: [id])
+  dosenPengampu DosenPengampuMK[]
+  jadwalDosen   JadwalDosen[] // Junction table
+  absensi       Absensi[]
 }
 
 model Mahasiswa {
@@ -187,30 +158,70 @@ model Mahasiswa {
   npm         String   @unique
   semester    Int
   password    String
-  tahunMasuk  String
+  tahunMasuk  Int
   isActive    Boolean
   userLevelId String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  asistenLab   AsistenLab? @relation(fields: [asistenLabId], references: [id])
-  asistenLabId String?
-
-  jadwal  Jadwal[]
-  Absensi Absensi[]
-
   userLevel             UserLevels              @relation(fields: [userLevelId], references: [id])
-  PendaftaranAsistenLab PendaftaranAsistenLab[]
+  jadwalMahasiswa       JadwalMahasiswa[] // Junction table
+  absensi               Absensi[]
+  pendaftaranAsistenLab PendaftaranAsistenLab[]
+  asistenLab            AsistenLab[]
 }
 
-enum SEMESTER {
-  GANJIL
-  GENAP
+// Junction Tables for Many-to-Many relationships
+model DosenPengampuMK {
+  id           String   @id
+  dosenId      String
+  matakuliahId String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  dosen      Dosen      @relation(fields: [dosenId], references: [id])
+  matakuliah Matakuliah @relation(fields: [matakuliahId], references: [id])
+
+  @@unique([dosenId, matakuliahId])
 }
 
+model JadwalDosen {
+  id       String @id
+  jadwalId String
+  dosenId  String
+
+  jadwal Jadwal @relation(fields: [jadwalId], references: [id])
+  dosen  Dosen  @relation(fields: [dosenId], references: [id])
+
+  @@unique([jadwalId, dosenId])
+}
+
+model JadwalMahasiswa {
+  id          String @id
+  jadwalId    String
+  mahasiswaId String
+
+  jadwal    Jadwal    @relation(fields: [jadwalId], references: [id])
+  mahasiswa Mahasiswa @relation(fields: [mahasiswaId], references: [id])
+
+  @@unique([jadwalId, mahasiswaId])
+}
+
+model JadwalAsistenLab {
+  id           String @id
+  jadwalId     String
+  asistenLabId String
+
+  jadwal     Jadwal     @relation(fields: [jadwalId], references: [id])
+  asistenLab AsistenLab @relation(fields: [asistenLabId], references: [id])
+
+  @@unique([jadwalId, asistenLabId])
+}
+
+// Scheduling
 model Jadwal {
   id           String    @id
-  hari         String
+  hari         HARI
   shiftId      String
   ruanganId    String
   semester     SEMESTER
@@ -226,75 +237,121 @@ model Jadwal {
   ruangan    RuanganLaboratorium @relation(fields: [ruanganId], references: [id])
   matakuliah Matakuliah          @relation(fields: [matakuliahId], references: [id])
 
-  dosen                 Dosen[]
-  asisten               AsistenLab[]
-  mahasiswa             Mahasiswa[]
-  Meeting               Meeting[]
-  PendaftaranAsistenLab PendaftaranAsistenLab[]
-  OverrideData          OverrideJadwal[]
+  jadwalDosen           JadwalDosen[]
+  jadwalAsistenLab      JadwalAsistenLab[]
+  jadwalMahasiswa       JadwalMahasiswa[]
+  meetings              Meeting[]
+  pendaftaranAsistenLab PendaftaranAsistenLab[]
+  overrideData          OverrideJadwal[]
+}
+
+model AsistenLab {
+  id          String    @id
+  mahasiswaId String
+  semester    Int
+  tahun       String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  mahasiswa        Mahasiswa          @relation(fields: [mahasiswaId], references: [id])
+  jadwalAsistenLab JadwalAsistenLab[]
+}
+
+model PendaftaranAsistenLab {
+  id             String             @id
+  mahasiswaId    String
+  jadwalId       String
+  nilaiTeori     NILAI_MATAKULIAH
+  nilaiPraktikum NILAI_MATAKULIAH
+  nilaiAkhir     NILAI_MATAKULIAH
+  status         ASISTEN_LAB_STATUS @default(PENDING)
+  keterangan     String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  mahasiswa  Mahasiswa  @relation(fields: [mahasiswaId], references: [id])
+  jadwal     Jadwal     @relation(fields: [jadwalId], references: [id])
+  matakuliah Matakuliah @relation(fields: [matakuliahId], references: [id])
+
+  // Derived from jadwal, but kept for query performance
+  matakuliahId String
+
+  @@unique([mahasiswaId, jadwalId])
 }
 
 model OverrideJadwal {
   id        String   @id
+  jadwalId  String
   message   String   @db.LongText
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  Jadwal    Jadwal?  @relation(fields: [jadwalId], references: [id])
-  jadwalId  String?
+
+  jadwal Jadwal @relation(fields: [jadwalId], references: [id])
 }
 
 model Meeting {
   id        String   @id
-  jadwalId  String?
+  jadwalId  String
   tanggal   String
   pertemuan Int
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  jadwal  Jadwal?   @relation(fields: [jadwalId], references: [id])
-  Absensi Absensi[]
+  jadwal  Jadwal    @relation(fields: [jadwalId], references: [id])
+  absensi Absensi[]
 }
 
+// Laboratory Management
 model RuanganLaboratorium {
-  id                 String    @id
-  nama               String
-  lokasi             String
-  namaKepalaLab      String?
-  nipKepalaLab       String?
-  kapasitas          Int       @default(25)
-  isLab              Boolean   @default(false)
-  isActive           Boolean   @default(true)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-  deletedAt          DateTime?
-  histroyKepalaLabId String?
+  id          String    @id
+  nama        String
+  lokasi      String
+  kepalaLabId String?
+  kapasitas   Int       @default(25)
+  isLab       Boolean   @default(false)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
-  historyKepalaLab HistoryKepalaLab?  @relation("currentLab", fields: [histroyKepalaLabId], references: [id])
-  historyLabs      HistoryKepalaLab[] @relation("historyLabs")
+  kepalaLab        KepalaLab?         @relation(fields: [kepalaLabId], references: [id])
+  historyKepalaLab HistoryKepalaLab[]
+  jadwal           Jadwal[]
+}
 
-  jadwal Jadwal[]
+// Separated KepalaLab entity
+model KepalaLab {
+  id        String   @id
+  nama      String
+  nip       String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ruanganLaboratorium RuanganLaboratorium[]
+  historyKepalaLab    HistoryKepalaLab[]
 }
 
 model HistoryKepalaLab {
-  id           String   @id
-  nama         String
-  nip          String
+  id           String    @id
+  kepalaLabId  String
   ruanganLabId String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  startDate    DateTime
+  endDate      DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  currentLab RuanganLaboratorium[] @relation("currentLab")
-  ruanganLab RuanganLaboratorium?  @relation("historyLabs", fields: [ruanganLabId], references: [id])
+  kepalaLab  KepalaLab           @relation(fields: [kepalaLabId], references: [id])
+  ruanganLab RuanganLaboratorium @relation(fields: [ruanganLabId], references: [id])
 }
 
 model Holidays {
-  id        String   @id
-  day       String
-  month     String
-  year      String
-  date      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id
+  name        String // Holiday name
+  date        DateTime // Changed from separate day/month/year to DateTime
+  isRecurring Boolean  @default(false) // For yearly recurring holidays
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Absensi {

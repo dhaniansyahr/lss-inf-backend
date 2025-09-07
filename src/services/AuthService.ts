@@ -31,9 +31,9 @@ export async function logIn(data: UserLoginDTO): Promise<ServiceResponse<any>> {
         const checkIdentity = getIdentityType(identity);
 
         if (checkIdentity === "NPM") {
-            return loginMahasiswa(data);
+            return loginAsAMahasiswa(data);
         } else if (checkIdentity === "NIP") {
-            return loginDosen(data);
+            return loginAsADosen(data);
         } else if (checkIdentity === "EMAIL") {
             return loginWithEmail(data);
         }
@@ -47,7 +47,7 @@ export async function logIn(data: UserLoginDTO): Promise<ServiceResponse<any>> {
     }
 }
 
-export async function loginMahasiswa(
+export async function loginAsAMahasiswa(
     data: UserLoginDTO
 ): Promise<ServiceResponse<any>> {
     try {
@@ -92,7 +92,7 @@ export async function loginMahasiswa(
     }
 }
 
-export async function loginDosen(
+export async function loginAsADosen(
     data: UserLoginDTO
 ): Promise<ServiceResponse<any>> {
     try {

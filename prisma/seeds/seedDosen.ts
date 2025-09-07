@@ -1,84 +1,81 @@
 import { BIDANG_MINAT, PrismaClient } from "@prisma/client";
 import { ulid } from "ulid";
 import bcrypt from "bcrypt";
-import * as XLSX from "xlsx";
 import path from "path";
 
-interface DosenExcel {
-        NAMA: string;
-        NIP: string;
-        BIDANG_MINAT: string;
+interface DosenExcelDTO {
+    NAMA: string;
+    NIP: string;
+    BIDANG_MINAT: string;
 }
 
-function readExcelFile(filePath: string): DosenExcel[] {
-        try {
-                const workbook = XLSX.readFile(filePath);
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                return XLSX.utils.sheet_to_json<DosenExcel>(worksheet);
-        } catch (error) {
-                console.error("Error reading Excel file:", error);
-                return [];
-        }
+async function readExcelFile<T>(path: string): Promise<T[]> {
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.readFile(path);
+
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    return XLSX.utils.sheet_to_json<T>(worksheet);
 }
 
-function randomNip(): string {
-        return Math.floor(1000000000000000 + Math.random() * 9000000000000000).toString();
+export function namaToEmail(nama: string): string {
+    // remove gelar
+    const gelarRegex =
+        /(Prof\.|Dr\.|Ir\.|S\.Si,|S\.T\.,|M\.Tech|M\.Si|M\.Sc\.|M\.Kom|M\.S\.|IPM\.|M\.Inf\.Tech|M\.Inf\.)/gi;
+    nama = nama.replace(gelarRegex, "").trim();
+
+    const convertToEmail = nama.toLowerCase().replace(/\s+/g, ".");
+
+    return `${convertToEmail}@usk.ac.id`;
 }
 
-function generateEmail(nama: string): string {
-        // Remove titles and degrees
-        const cleanName = nama.replace(/(Prof\.|Dr\.|Ir\.|S\.Si,|S\.T\.,|M\.Tech|M\.Si|M\.Sc\.|M\.Kom|M\.S\.|IPM\.|M\.Inf\.Tech|M\.Inf\.)/gi, "").trim();
-
-        // Split into parts and take first two parts
-        const nameParts = cleanName.split(" ").filter((part) => part.length > 0);
-        const emailName = nameParts.slice(0, 2).join(".").toLowerCase();
-
-        // Remove special characters and replace spaces
-        const sanitizedEmail = emailName
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "")
-                .replace(/[^a-z0-9.]/g, "");
-
-        return `${sanitizedEmail}@usk.ac.id`;
+function generateNipDosen(): string {
+    const randomDigits = () => Math.floor(Math.random() * 10);
+    let nip = "";
+    for (let i = 0; i < 16; i++) {
+        nip += randomDigits();
+    }
+    return nip;
 }
 
 export async function seedDosen(prisma: PrismaClient) {
-        const countDosen = await prisma.dosen.count();
+    const countDosen = await prisma.dosen.count();
 
-        if (countDosen === 0) {
-                const hashedPassword = await bcrypt.hash("dosen123", 12);
+    if (countDosen === 0) {
+        const hashedPassword = await bcrypt.hash("dosen123", 12);
 
-                const userLevel = await prisma.userLevels.findFirst({
-                        where: {
-                                name: "DOSEN",
-                        },
-                });
+        const userLevel = await prisma.userLevels.findFirst({
+            where: {
+                name: "DOSEN",
+            },
+        });
 
-                if (userLevel) {
-                        // Read from Excel file in the seeds/data directory
-                        const excelPath = path.join(__dirname, "data", "dosen.xlsx");
-                        const dosenData = readExcelFile(excelPath);
+        if (userLevel) {
+            // Read from Excel file in the seeds/data directory
+            const excelPath = path.join(__dirname, "data", "dosen.xlsx");
+            const excelData = await readExcelFile<DosenExcelDTO>(excelPath);
 
-                        console.log(`Found ${dosenData.length} dosen in Excel`);
+            const dosenData = await Promise.all(
+                excelData.map(async (data) => {
+                    return {
+                        id: ulid(),
+                        nama: data.NAMA,
+                        email: namaToEmail(data.NAMA),
+                        password: hashedPassword,
+                        nip: data.NIP ?? generateNipDosen(),
+                        bidangMinat: data.BIDANG_MINAT as BIDANG_MINAT,
+                        userLevelId: userLevel.id,
+                    };
+                })
+            );
 
-                        for (const data of dosenData) {
-                                await prisma.dosen.create({
-                                        data: {
-                                                id: ulid(),
-                                                nama: data.NAMA,
-                                                email: generateEmail(data.NAMA),
-                                                password: hashedPassword,
-                                                nip: data.NIP || randomNip(),
-                                                bidangMinat: data.BIDANG_MINAT as BIDANG_MINAT,
-                                                userLevelId: userLevel.id,
-                                        },
-                                });
-                        }
+            const dosen = await prisma.dosen.createMany({
+                data: dosenData,
+            });
 
-                        console.log(`${dosenData.length} Dosen seeded`);
-                }
-        } else {
-                console.log("Dosen already seeded");
+            console.log(`${dosen.count} Dosen seeded`);
         }
+    }
+
+    console.log("✅ Dosen already seeded");
 }

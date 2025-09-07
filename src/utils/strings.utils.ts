@@ -74,3 +74,23 @@ export function getIdentityType(identity: string): string {
     if (isValidNIP(identity)) return "NIP";
     return "INVALID";
 }
+
+export function namaToEmail(nama: string): string {
+    // remove gelar
+    const gelarRegex =
+        /(Prof\.|Dr\.|Ir\.|S\.Si,|S\.T\.,|M\.Tech|M\.Si|M\.Sc\.|M\.Kom|M\.S\.|IPM\.|M\.Inf\.Tech|M\.Inf\.)/gi;
+    nama = nama.replace(gelarRegex, "").trim();
+
+    const convertToEmail = nama.toLowerCase().replace(/\s+/g, ".");
+
+    return `${convertToEmail}@usk.ac.id`;
+}
+
+export function generateNipDosen(): string {
+    const randomDigits = () => Math.floor(Math.random() * 10);
+    let nip = "";
+    for (let i = 0; i < 16; i++) {
+        nip += randomDigits();
+    }
+    return nip;
+}

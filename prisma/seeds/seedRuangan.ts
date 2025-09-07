@@ -1,33 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 import { ulid } from "ulid";
 
-/**
- * RUANGAN SEEDER
- * ==============
- *
- * This file contains two functions:
- *
- * 1. seedRuangan() - Creates classroom rooms for theory courses
- *    - Ruang Kuliah (classroom) rooms
- *    - NO kepala lab assignment (classrooms don't need lab heads)
- *
- * 2. seedRuanganLab() - Creates laboratory rooms for praktikum courses
- *    - Laboratory rooms (Lab. prefix)
- *    - WITH random kepala lab assignment from database dosen
- *    - Requires dosen to be seeded first
- *
- * Usage:
- * - Call seedRuangan() for classroom rooms
- * - Call seedRuanganLab() for laboratory rooms (after seeding dosen)
- */
-
 export async function seedRuangan(prisma: PrismaClient) {
     const countRuangan = await prisma.ruanganLaboratorium.count();
 
     if (countRuangan === 0) {
         console.log("🏫 Creating 10 ruangan for theory matakuliah...");
 
-        // Define 10 classroom rooms for theoretical subjects (no kepala lab needed)
         const ruanganData = [
             {
                 nama: "Ruang Kuliah A101",
@@ -77,7 +56,6 @@ export async function seedRuangan(prisma: PrismaClient) {
 
             console.log(`📍 Creating ${roomData.nama}...`);
 
-            // Create the classroom room (no kepala lab for Ruang Kuliah)
             await prisma.ruanganLaboratorium.create({
                 data: {
                     id: ulid(),
@@ -85,6 +63,7 @@ export async function seedRuangan(prisma: PrismaClient) {
                     lokasi: roomData.lokasi,
                     isActive: true,
                     isLab: false,
+                    kapasitas: 30, // Added default capacity for classrooms
                 },
             });
 
@@ -108,7 +87,6 @@ export async function seedRuangan(prisma: PrismaClient) {
  * Call this function separately if you also need lab rooms
  */
 export async function seedRuanganLab(prisma: PrismaClient) {
-    // Check if laboratory rooms already exist
     const existingLabCount = await prisma.ruanganLaboratorium.count({
         where: {
             isLab: true,
@@ -124,7 +102,6 @@ export async function seedRuanganLab(prisma: PrismaClient) {
 
     console.log("🧪 Creating laboratory rooms for praktikum matakuliah...");
 
-    // Get all available dosen from database
     const allDosen = await prisma.dosen.findMany();
 
     if (allDosen.length === 0) {
@@ -134,11 +111,6 @@ export async function seedRuanganLab(prisma: PrismaClient) {
         return;
     }
 
-    console.log(
-        `📊 Found ${allDosen.length} dosen in database for kepala lab assignment`
-    );
-
-    // Define laboratory rooms for practical subjects
     const labRuanganData = [
         {
             nama: "Lab. Database",
@@ -176,7 +148,15 @@ export async function seedRuanganLab(prisma: PrismaClient) {
         const randomDosen =
             allDosen[Math.floor(Math.random() * allDosen.length)];
 
-        // Create the lab room
+        // Create kepala lab record first
+        const kepalaLab = await prisma.kepalaLab.create({
+            data: {
+                id: ulid(),
+                nama: randomDosen.nama,
+                nip: randomDosen.nip,
+            },
+        });
+
         const ruangan = await prisma.ruanganLaboratorium.create({
             data: {
                 id: ulid(),
@@ -185,26 +165,16 @@ export async function seedRuanganLab(prisma: PrismaClient) {
                 isActive: true,
                 isLab: true,
                 kapasitas: 25,
+                kepalaLabId: kepalaLab.id,
             },
         });
 
-        // Create history kepala lab for this room with random dosen
-        const kepalaLab = await prisma.historyKepalaLab.create({
+        await prisma.historyKepalaLab.create({
             data: {
                 id: ulid(),
-                nama: randomDosen.nama,
-                nip: randomDosen.nip,
+                kepalaLabId: kepalaLab.id,
                 ruanganLabId: ruangan.id,
-            },
-        });
-
-        // Update the room with kepala lab information
-        await prisma.ruanganLaboratorium.update({
-            where: { id: ruangan.id },
-            data: {
-                histroyKepalaLabId: kepalaLab.id,
-                namaKepalaLab: kepalaLab.nama,
-                nipKepalaLab: kepalaLab.nip,
+                startDate: new Date(),
             },
         });
 
@@ -216,4 +186,12 @@ export async function seedRuanganLab(prisma: PrismaClient) {
     console.log(
         "🎉 All laboratory rooms for praktikum matakuliah have been seeded successfully!"
     );
+}
+
+/**
+ * Helper function to seed both classroom and laboratory rooms
+ */
+export async function seedAllRuangan(prisma: PrismaClient) {
+    await seedRuangan(prisma);
+    await seedRuanganLab(prisma);
 }

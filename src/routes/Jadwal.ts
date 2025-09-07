@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import * as JadwalController from "$controllers/rest/JadwalController";
+import * as JadwalController from "$controllers/rest/jadwal-controller";
 import * as AuthMiddleware from "$middlewares/authMiddleware";
-import * as JadwalValidation from "$validations/JdwalValidation";
+import * as JadwalValidation from "$validations/jadwal-validation";
 
 const JadwalRoutes = new Hono();
 
@@ -12,96 +12,48 @@ JadwalRoutes.get(
     JadwalController.getAll
 );
 
-JadwalRoutes.delete("/", AuthMiddleware.checkJwt, JadwalController.deleteAll);
-
-JadwalRoutes.get(
-    "/check-jadwal-teori",
-    AuthMiddleware.checkJwt,
-    JadwalController.checkHasJadwalTeori
-);
-
-// Absent Now
-JadwalRoutes.get(
-    "/absent/now",
-    AuthMiddleware.checkJwt,
-    JadwalController.getAbsentNow
-);
-
-JadwalRoutes.get(
-    "/today",
-    AuthMiddleware.checkJwt,
-    JadwalController.getAllScheduleToday
-);
-
-JadwalRoutes.get(
-    "/:id",
-    AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("JADWAL", "read"),
-    JadwalController.getById
-);
-
-// Get All Participants and Meetings By Jadwal ID
-JadwalRoutes.get(
-    "/:id/meetings-and-participants",
-    AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("JADWAL", "read"),
-    JadwalController.getAllParticipantsAndMeetingsByJadwalId
-);
-
-// Create Jadwal
 JadwalRoutes.post(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("JADWAL", "create"),
     JadwalValidation.validateJadwal,
     JadwalController.create
 );
 
+JadwalRoutes.get("/:id", AuthMiddleware.checkJwt, JadwalController.getById);
+
 JadwalRoutes.put(
     "/:id",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("JADWAL", "create"),
-    JadwalController.updateJadwal
+    JadwalValidation.validateJadwal,
+    JadwalController.update
 );
 
-// Absent
-JadwalRoutes.post(
-    "/absent",
+JadwalRoutes.delete("/", AuthMiddleware.checkJwt, JadwalController.deleteAll);
+
+JadwalRoutes.get(
+    "/check",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("JADWAL", "absensi"),
-    JadwalController.absent
+    JadwalController.checkTheoryScheduleExists
 );
 
-// Generate Jadwal
-JadwalRoutes.post(
-    "/generate-all",
-    AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("JADWAL", "generate"),
-    JadwalController.generateAllAvailableSchedules
-);
-
-// Process Excel for Teori Jadwal
-JadwalRoutes.post(
-    "/bulk-upload",
-    AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("JADWAL", "create"),
-    JadwalController.processExcelForTeoriJadwal
-);
-
-// Update Meeting
 JadwalRoutes.put(
-    "/meeting/:meetingId",
+    "/:id/meeting",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("JADWAL", "update"),
     JadwalValidation.validateUpdateMeeting,
     JadwalController.updateMeeting
 );
 
 JadwalRoutes.post(
-    "/check",
+    "/bulk-upload",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("JADWAL", "create"),
-    JadwalController.checkFreeSchedule
+    JadwalController.bulkUploadTheorySchedule
+);
+
+// Generate Jadwal
+JadwalRoutes.post(
+    "/generate",
+    AuthMiddleware.checkJwt,
+    JadwalController.generateSchedule
 );
 
 export default JadwalRoutes;
