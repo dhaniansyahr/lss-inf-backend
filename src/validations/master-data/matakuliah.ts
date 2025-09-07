@@ -3,7 +3,6 @@ import { MatakuliahDTO } from "$entities/master-data/mata-kuliah";
 import { ErrorStructure } from "$validations/helper";
 import { Context, Next } from "hono";
 import { response_bad_request } from "$utils/response.utils";
-import { BIDANG_MINAT, TYPE_MATKUL } from "@prisma/client";
 
 export async function validateMatakuliah(c: Context, next: Next) {
     const data: MatakuliahDTO = await c.req.json();
@@ -80,21 +79,6 @@ export async function validateMatakuliah(c: Context, next: Next) {
             generateErrorStructure(
                 "bidangMinat",
                 "Bidang minat matakuliah harus berupa string"
-            )
-        );
-
-    if (Object.values(TYPE_MATKUL).includes(data.type))
-        invalidFields.push(
-            generateErrorStructure(
-                "type",
-                "Type matakuliah tidak valid, harus berupa WAJIB atau PILIHAN"
-            )
-        );
-    if (Object.values(BIDANG_MINAT).includes(data.bidangMinat))
-        invalidFields.push(
-            generateErrorStructure(
-                "bidangMinat",
-                "Bidang minat matakuliah tidak valid, harus berupa RPL atau DATA_MINING atau JARINGAN atau GIS atau UMUM"
             )
         );
 
