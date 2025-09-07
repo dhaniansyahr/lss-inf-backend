@@ -94,3 +94,33 @@ export function generateNipDosen(): string {
     }
     return nip;
 }
+
+export function parseNameAndNip(text: string): { name: string; nip: string } {
+    // Remove extra whitespaces and normalize the string
+    const cleanText = text.trim().replace(/\s+/g, " ");
+
+    // Find the position of "NIP." (case insensitive)
+    const nipIndex = cleanText.search(/NIP\./i);
+
+    if (nipIndex === -1) {
+        // If no NIP found, return the whole text as name and empty NIP
+        return {
+            name: cleanText,
+            nip: "",
+        };
+    }
+
+    // Extract name part (everything before "NIP.")
+    const namePart = cleanText.substring(0, nipIndex).trim();
+
+    // Extract NIP part (everything after "NIP.")
+    const nipPart = cleanText.substring(nipIndex + 4).trim(); // +4 for "NIP."
+
+    // Clean up the NIP to only contain numbers
+    const cleanNip = nipPart.replace(/\D/g, ""); // Remove all non-digit characters
+
+    return {
+        name: namePart,
+        nip: cleanNip,
+    };
+}

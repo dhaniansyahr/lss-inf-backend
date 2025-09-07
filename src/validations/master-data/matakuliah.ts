@@ -83,22 +83,14 @@ export async function validateMatakuliah(c: Context, next: Next) {
             )
         );
 
-    if (
-        Object.values(TYPE_MATKUL)
-            .map((value) => value)
-            .includes(data.type)
-    )
+    if (Object.values(TYPE_MATKUL).includes(data.type))
         invalidFields.push(
             generateErrorStructure(
                 "type",
                 "Type matakuliah tidak valid, harus berupa WAJIB atau PILIHAN"
             )
         );
-    if (
-        Object.values(BIDANG_MINAT)
-            .map((value) => value)
-            .includes(data.bidangMinat)
-    )
+    if (Object.values(BIDANG_MINAT).includes(data.bidangMinat))
         invalidFields.push(
             generateErrorStructure(
                 "bidangMinat",

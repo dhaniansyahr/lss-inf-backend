@@ -23,11 +23,11 @@ export async function validateJadwal(c: Context, next: Next) {
             generateErrorStructure("ruanganId", "Ruangan tidak boleh kosong")
         );
 
-    if (!data.isOverride)
+    if (typeof data.isOverride !== "boolean")
         invalidFields.push(
             generateErrorStructure(
                 "isOverride",
-                "Is override tidak boleh kosong"
+                "Is override harus berupa boolean"
             )
         );
 

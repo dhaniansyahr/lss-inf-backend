@@ -27,7 +27,7 @@ import {
 } from "./helpers/jadwal";
 import { DateTime } from "luxon";
 import { DAYS, geneticAlgorithm } from "./genetic-service";
-import { generateNipDosen } from "$utils/strings.utils";
+import { generateNipDosen, parseNameAndNip } from "$utils/strings.utils";
 
 async function checkScheduleHasConflict(
     schedule: JadwalDTO
@@ -272,6 +272,23 @@ export async function getAll(
     try {
         const usedFilters = buildFilterQueryLimitOffsetV2(filters);
 
+        usedFilters.where = {
+            matakuliah: {
+                isTeori: false,
+            },
+        };
+
+        usedFilters.include = {
+            jadwalDosen: {
+                include: {
+                    dosen: true,
+                },
+            },
+            matakuliah: true,
+            ruangan: true,
+            shift: true,
+        };
+
         const [jadwal, totalData] = await Promise.all([
             prisma.jadwal.findMany(usedFilters),
             prisma.jadwal.count({
@@ -443,56 +460,60 @@ export async function bulkUploadTheory(file: File) {
             );
         }
 
-        const schedulesData = await Promise.all(
-            excelData.map(async (data) => {
-                const { matakuliah } = await findOrCreateMatakuliah(
-                    data.Kode,
-                    data.Nama
-                );
-                const { ruangan } = await findOrCreateRuangan(data.Ruang, "");
+        const results: Jadwal[] = [];
 
-                const timeRange = data.Waktu.split("-");
-                const startTime = timeRange[0];
-                const endTime = timeRange[1];
+        for (const data of excelData) {
+            const { matakuliah } = await findOrCreateMatakuliah(
+                data.Kode,
+                data.Nama
+            );
+            const { ruangan } = await findOrCreateRuangan(data.Ruang, "");
 
-                const { shift } = await findOrCreateShift(startTime, endTime);
+            const timeRange = data.Waktu.split("-");
+            const startTime = timeRange[0];
+            const endTime = timeRange[1];
 
-                const coordinatorKelas = data["Koordinator Kelas"].trim();
-                const coordinatorKelasNip =
-                    coordinatorKelas.match(/NIP\.\s*(\d+)/)?.[1];
-                const coordinatorKelasName =
-                    coordinatorKelas.match(/^([^NIP]+)/);
+            const { shift } = await findOrCreateShift(startTime, endTime);
 
-                const dosenName = coordinatorKelasName
-                    ? coordinatorKelasName[1].trim().replace(/,\s*$/, "")
-                    : coordinatorKelas;
-                const dosenNip = coordinatorKelasNip
-                    ? coordinatorKelasNip
-                    : generateNipDosen();
+            const coordinatorKelas = data["Koordinator Kelas"].trim();
+            const { name, nip } = parseNameAndNip(coordinatorKelas);
 
-                const { dosen } = await findOrCreateDosen(dosenName, dosenNip);
+            const dosenName = name;
+            const dosenNip = nip ? nip : generateNipDosen();
 
-                return {
-                    id: ulid(),
-                    matakuliahId: matakuliah.id,
-                    ruanganId: ruangan.id,
-                    shiftId: shift.id,
-                    dosenId: dosen.id,
-                    kelas: data.Kelas,
-                    hari: data.Hari.toUpperCase() as HARI,
-                    semester: academicPeriod.semester,
-                    tahun: academicPeriod.year,
-                };
-            })
-        );
+            const { dosen } = await findOrCreateDosen(dosenName, dosenNip);
 
-        const schedules = await prisma.jadwal.createMany({
-            data: schedulesData,
-        });
+            if (matakuliah.isTeori) {
+                const scheduleId = ulid();
+                const schedule = await prisma.jadwal.create({
+                    data: {
+                        id: scheduleId,
+                        matakuliahId: matakuliah.id,
+                        ruanganId: ruangan.id,
+                        shiftId: shift.id,
+                        kelas: data.Kelas,
+                        hari:
+                            data.Hari.toUpperCase() === "-"
+                                ? HARI.SENIN
+                                : (data.Hari.toUpperCase() as HARI),
+                        semester: academicPeriod.semester,
+                        tahun: academicPeriod.year,
+                        jadwalDosen: {
+                            create: {
+                                id: ulid(),
+                                dosenId: dosen.id,
+                            },
+                        },
+                    },
+                });
+
+                results.push(schedule);
+            }
+        }
 
         return {
             status: true,
-            data: schedules,
+            data: results,
         };
     } catch (error) {
         Logger.error(`JadwalService.bulkUploadTheory : ${error}`);

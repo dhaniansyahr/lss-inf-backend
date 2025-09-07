@@ -1,7 +1,7 @@
 import { prisma } from "$utils/prisma.utils";
 import Logger from "$pkg/logger";
 import { ulid } from "ulid";
-import { BIDANG_MINAT, TYPE_MATKUL } from "@prisma/client";
+import { BIDANG_MINAT, Dosen, Matakuliah, TYPE_MATKUL } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { namaToEmail } from "$utils/strings.utils";
 
@@ -12,7 +12,7 @@ export async function findOrCreateMatakuliah(
     kode: string,
     nama: string,
     defaultSks: number = 3
-): Promise<{ matakuliah: any; isNew: boolean }> {
+): Promise<{ matakuliah: Matakuliah; isNew: boolean }> {
     try {
         // Try to find existing matakuliah by kode
         let matakuliah = await prisma.matakuliah.findUnique({
@@ -54,7 +54,7 @@ export async function findOrCreateMatakuliah(
 export async function findOrCreateDosen(
     nama: string,
     nip: string
-): Promise<{ dosen: any; isNew: boolean }> {
+): Promise<{ dosen: Dosen; isNew: boolean }> {
     try {
         // Find User Level for DOSEN
         const lectureRole = await prisma.userLevels.findFirst({
@@ -87,12 +87,7 @@ export async function findOrCreateDosen(
             const response = await prisma.dosen.update({
                 where: { id: lectureExists.id },
                 data: {
-                    nama,
                     nip,
-                    email: namaToEmail(nama),
-                    password: hashedPassword,
-                    bidangMinat: BIDANG_MINAT.UMUM,
-                    userLevelId: lectureRole.id,
                 },
             });
 
