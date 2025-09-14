@@ -25,13 +25,13 @@ export interface TargetPair {
 export type Chromosome = Gene[];
 
 export const DEFAULT = {
-    populationSize: 180,
-    generations: 400,
+    populationSize: 100,
+    generations: 200,
     crossoverRate: 0.8,
-    mutationRate: 0.06,
+    mutationRate: 0.1,
     tournamentSize: 3,
-    elitism: 6,
-    stagnationLimit: 100,
+    elitism: 5,
+    stagnationLimit: 50,
 };
 
 const WEIGHTS = {
@@ -75,6 +75,75 @@ export async function getTheoryJadwal() {
     });
 
     return schedules;
+}
+
+// New function to get theory courses with their names for mapping
+export async function getTheoryCoursesForMapping() {
+    const courses = await prisma.matakuliah.findMany({
+        where: {
+            isTeori: true,
+        },
+        select: {
+            id: true,
+            nama: true,
+            kode: true,
+        },
+    });
+
+    return courses;
+}
+
+// New function to get practical courses with their names for mapping
+export async function getPracticalCoursesForMapping() {
+    const courses = await prisma.matakuliah.findMany({
+        where: {
+            isTeori: false,
+        },
+        select: {
+            id: true,
+            nama: true,
+            kode: true,
+        },
+    });
+
+    return courses;
+}
+
+function mapPracticalToTheoryCourses(
+    practicalCourses: any[],
+    theoryCourses: any[]
+) {
+    const mapping = new Map<string, string>(); // practicalId -> theoryId
+
+    for (const practical of practicalCourses) {
+        // Try to find corresponding theory course by name
+        // Remove "PRAKTIKUM" prefix and match with theory course name
+        const practicalName = practical.nama
+            .replace(/^PRAKTIKUM\s*/i, "")
+            .trim();
+
+        const correspondingTheory = theoryCourses.find(
+            (theory) =>
+                theory.nama.toLowerCase() === practicalName.toLowerCase() ||
+                theory.nama
+                    .toLowerCase()
+                    .includes(practicalName.toLowerCase()) ||
+                practicalName.toLowerCase().includes(theory.nama.toLowerCase())
+        );
+
+        if (correspondingTheory) {
+            mapping.set(practical.id, correspondingTheory.id);
+            Logger.info(
+                `Mapped practical "${practical.nama}" to theory "${correspondingTheory.nama}"`
+            );
+        } else {
+            Logger.warn(
+                `No corresponding theory course found for practical "${practical.nama}"`
+            );
+        }
+    }
+
+    return mapping;
 }
 
 export async function getShiftsAndRooms() {
@@ -337,9 +406,16 @@ type GAResponse = { bestChoromosome: Chromosome; bestScore: number } | {};
 export async function geneticAlgorithm(): Promise<ServiceResponse<GAResponse>> {
     try {
         // 1. Domain data
-        const [theorySchedules, { shifts, rooms }] = await Promise.all([
+        const [
+            theorySchedules,
+            { shifts, rooms },
+            practicalCourses,
+            theoryCourses,
+        ] = await Promise.all([
             getTheoryJadwal(),
             getShiftsAndRooms(),
+            getPracticalCoursesForMapping(),
+            getTheoryCoursesForMapping(),
         ]);
 
         if (theorySchedules.length === 0) {
@@ -353,6 +429,11 @@ export async function geneticAlgorithm(): Promise<ServiceResponse<GAResponse>> {
                 "Tidak ada shift atau ruangan yang ditemukan!"
             );
         }
+
+        const practicalToTheoryMapping = mapPracticalToTheoryCourses(
+            practicalCourses,
+            theoryCourses
+        );
 
         // Build Theory Maps
         const theorySlotByClass = new Map<string, Set<string>>();
@@ -390,21 +471,35 @@ export async function geneticAlgorithm(): Promise<ServiceResponse<GAResponse>> {
 
         // Build Target Pairs if Not Provided
         let targetPairs: TargetPair[] = [];
-        if (!targetPairs || targetPairs.length === 0) {
-            for (const [courseId, classes] of matkulToClass) {
-                for (const c of classes) {
-                    targetPairs.push({
-                        matakuliahId: courseId,
-                        kelas: c,
-                        copies: 1,
-                    });
+        // if (!targetPairs || targetPairs.length === 0) {
+        //     for (const [courseId, classes] of matkulToClass) {
+        //         for (const c of classes) {
+        //             targetPairs.push({
+        //                 matakuliahId: courseId,
+        //                 kelas: c,
+        //                 copies: 1,
+        //             });
+        //         }
+        //     }
+        // }
+
+        for (const practical of practicalCourses) {
+            // Get corresponding theory course
+            const theoryId = practicalToTheoryMapping.get(practical.id);
+            if (theoryId) {
+                // Get classes from theory course
+                const theoryClasses = matkulToClass.get(theoryId);
+                if (theoryClasses) {
+                    for (const kelas of theoryClasses) {
+                        targetPairs.push({
+                            matakuliahId: practical.id, // Use PRACTICAL course ID
+                            kelas: kelas,
+                            copies: 1,
+                        });
+                    }
                 }
             }
         }
-
-        // const courseIdsToSchedule = Array.from(
-        //     new Set(targetPairs.map((p) => p.matakuliahId))
-        // );
 
         // Allowed Dosen
         const allowedDosenMap: Record<string, string[]> = {};
@@ -417,11 +512,35 @@ export async function geneticAlgorithm(): Promise<ServiceResponse<GAResponse>> {
             }
         }
 
-        const S = DAYS.length * shifts.length;
-        const R = rooms.length;
-        const totalCopies = targetPairs.reduce(
+        // 6. Map practical course IDs to their corresponding theory course dosen
+        const practicalAllowedDosenMap: Record<string, string[]> = {};
+        for (const [practicalId, theoryId] of practicalToTheoryMapping) {
+            if (allowedDosenMap[theoryId]) {
+                practicalAllowedDosenMap[practicalId] =
+                    allowedDosenMap[theoryId];
+            }
+        }
+
+        // const S = DAYS.length * shifts.length;
+        // const R = rooms.length;
+        // const totalCopies = targetPairs.reduce(
+        //     (acc, t) => acc + (t.copies ?? 1),
+        //     0
+        // );
+
+        // Before Population Size Calculation = S * R * totalCopies
+
+        const totalTasks = targetPairs.reduce(
             (acc, t) => acc + (t.copies ?? 1),
             0
+        );
+        const optimalPopulationSize = Math.min(
+            DEFAULT.populationSize,
+            Math.max(50, totalTasks * 2)
+        );
+
+        Logger.info(
+            `Starting GA with population size: ${optimalPopulationSize}, tasks: ${totalTasks}`
         );
 
         // 4. Initial Population
@@ -430,9 +549,9 @@ export async function geneticAlgorithm(): Promise<ServiceResponse<GAResponse>> {
             daysCount: DAYS.length,
             shifts,
             rooms,
-            allowedDosenMap,
+            allowedDosenMap: practicalAllowedDosenMap,
             fallbackDosenIds: [],
-            populationSize: S * R * totalCopies,
+            populationSize: optimalPopulationSize, // Before = S * R * totalCopies
             theorySlotsByClass: theorySlotByClass,
         });
 
@@ -440,13 +559,19 @@ export async function geneticAlgorithm(): Promise<ServiceResponse<GAResponse>> {
         let bestChoromosome: Chromosome | null = null;
         let bestScore = -Infinity;
         let stagnation = 0;
+        let lastImprovement = 0;
+
+        // Before Improvement
+        // let bestChoromosome: Chromosome | null = null;
+        // let bestScore = -Infinity;
+        // let stagnation = 0;
 
         for (let gen = 0; gen < DEFAULT.generations; gen++) {
             // Fitness Evalution
             const evals = populations.map((p) =>
                 fitness(
                     p,
-                    allowedDosenMap,
+                    practicalAllowedDosenMap,
                     theorySlotByClass,
                     theoryDosenSlotCount
                 )
@@ -454,16 +579,36 @@ export async function geneticAlgorithm(): Promise<ServiceResponse<GAResponse>> {
             const fitnessArr = evals.map((e) => e.fitness);
 
             // Update Bestie
+            let improved = false;
             for (let i = 0; i < populations.length; i++) {
                 if (fitnessArr[i] > bestScore) {
                     bestScore = fitnessArr[i];
                     bestChoromosome = populations[i];
-                    stagnation = 0;
+                    improved = true;
+                    lastImprovement = gen;
                 }
             }
 
-            stagnation++;
-            if (stagnation > DEFAULT.stagnationLimit) break;
+            if (improved) {
+                stagnation = 0;
+            } else {
+                stagnation++;
+            }
+
+            if (stagnation > DEFAULT.stagnationLimit) {
+                Logger.info(
+                    `GA converged at generation ${gen} with last improvement at generation ${lastImprovement} (stagnation: ${stagnation})`
+                );
+                break;
+            }
+
+            // Early Termination condition jika dapat bestscore
+            if (bestScore >= 0.99) {
+                Logger.info(
+                    `GA converged at generation ${gen} (best score: ${bestScore})`
+                );
+                break;
+            }
 
             // Sort Indexes by Fitness DESC
             const sortedIndexes = fitnessArr
@@ -473,12 +618,24 @@ export async function geneticAlgorithm(): Promise<ServiceResponse<GAResponse>> {
 
             // Elitsm
             const nextPopulation: Chromosome[] = [];
-            for (let e = 0; e > DEFAULT.elitism; e++) {
+            for (let e = 0; e < DEFAULT.elitism; e++) {
                 nextPopulation.push(populations[sortedIndexes[e]]);
             }
 
+            // Before Improvement
+            // for (let e = 0; e > DEFAULT.elitism; e++) {
+            //     nextPopulation.push(populations[sortedIndexes[e]]);
+            // }
+
+            // Fill remaining population
+            let iterations = 0;
+            const maxIterations = optimalPopulationSize * 3;
+
             // Fill Remaining Population
-            while (nextPopulation.length < DEFAULT.populationSize) {
+            while (
+                nextPopulation.length < optimalPopulationSize &&
+                iterations < maxIterations
+            ) {
                 const parentA = tournamentSelection(
                     populations,
                     fitnessArr,
@@ -499,7 +656,7 @@ export async function geneticAlgorithm(): Promise<ServiceResponse<GAResponse>> {
                     daysCount: DAYS.length,
                     shifts,
                     rooms,
-                    allowedDosenMap,
+                    allowedDosenMap: practicalAllowedDosenMap,
                     fallbackDosenIds: [],
                     theorySlotsByClass: theorySlotByClass,
                     mutationRate: DEFAULT.mutationRate,
@@ -509,12 +666,13 @@ export async function geneticAlgorithm(): Promise<ServiceResponse<GAResponse>> {
                     daysCount: DAYS.length,
                     shifts,
                     rooms,
-                    allowedDosenMap,
+                    allowedDosenMap: practicalAllowedDosenMap,
                     fallbackDosenIds: [],
                     theorySlotsByClass: theorySlotByClass,
                     mutationRate: DEFAULT.mutationRate,
                 });
 
+                // Improvement Repair Child
                 const repairChild = (c: Chromosome) => {
                     const roomSlotCount = new Map<string, number>();
 
@@ -523,15 +681,12 @@ export async function geneticAlgorithm(): Promise<ServiceResponse<GAResponse>> {
                             g.hariIdx,
                             g.shiftId
                         )}`;
-                        roomSlotCount.set(
-                            roomSlotKey,
-                            (roomSlotCount.get(roomSlotKey) || 0) + 1
-                        );
+                        const currentCount =
+                            roomSlotCount.get(roomSlotKey) || 0;
 
-                        // Check conflict dosen
-                        if ((roomSlotCount.get(roomSlotKey) || 0) > 1) {
-                            // Try to Swap
-                            for (let attempt = 0; attempt < 4; attempt++) {
+                        if (currentCount > 0) {
+                            // Quick room swap
+                            for (let attempt = 0; attempt < 3; attempt++) {
                                 const newRoom = sample(rooms).id;
                                 const alternativeKey = `${newRoom}_${slotKey(
                                     g.hariIdx,
@@ -540,34 +695,82 @@ export async function geneticAlgorithm(): Promise<ServiceResponse<GAResponse>> {
 
                                 if (!roomSlotCount.get(alternativeKey)) {
                                     g.ruanganId = newRoom;
-                                    roomSlotCount.set(
-                                        alternativeKey,
-                                        (roomSlotCount.get(alternativeKey) ||
-                                            0) + 1
-                                    );
-
-                                    roomSlotCount.set(
-                                        roomSlotKey,
-                                        roomSlotCount.get(roomSlotKey)! - 1
-                                    );
+                                    roomSlotCount.set(alternativeKey, 1);
                                     break;
                                 }
                             }
+                        } else {
+                            roomSlotCount.set(roomSlotKey, 1);
                         }
                     }
                 };
+
+                // const repairChild = (c: Chromosome) => {
+                //     const roomSlotCount = new Map<string, number>();
+
+                //     for (const g of c) {
+                //         const roomSlotKey = `${g.ruanganId}_${slotKey(
+                //             g.hariIdx,
+                //             g.shiftId
+                //         )}`;
+                //         roomSlotCount.set(
+                //             roomSlotKey,
+                //             (roomSlotCount.get(roomSlotKey) || 0) + 1
+                //         );
+
+                //         // Check conflict dosen
+                //         if ((roomSlotCount.get(roomSlotKey) || 0) > 1) {
+                //             // Try to Swap
+                //             for (let attempt = 0; attempt < 4; attempt++) {
+                //                 const newRoom = sample(rooms).id;
+                //                 const alternativeKey = `${newRoom}_${slotKey(
+                //                     g.hariIdx,
+                //                     g.shiftId
+                //                 )}`;
+
+                //                 if (!roomSlotCount.get(alternativeKey)) {
+                //                     g.ruanganId = newRoom;
+                //                     roomSlotCount.set(
+                //                         alternativeKey,
+                //                         (roomSlotCount.get(alternativeKey) ||
+                //                             0) + 1
+                //                     );
+
+                //                     roomSlotCount.set(
+                //                         roomSlotKey,
+                //                         roomSlotCount.get(roomSlotKey)! - 1
+                //                     );
+                //                     break;
+                //                 }
+                //             }
+                //         }
+                //     }
+                // };
 
                 repairChild(childA);
                 repairChild(childB);
 
                 nextPopulation.push(childA);
-                if (nextPopulation.length < DEFAULT.populationSize)
+                if (nextPopulation.length < optimalPopulationSize)
                     nextPopulation.push(childB);
+
+                iterations++;
             }
 
-            // SWAP Population
-            for (let i = 0; i < nextPopulation.length; i++)
-                populations[i] = nextPopulation[i];
+            if (iterations >= maxIterations) {
+                Logger.warn(
+                    `Population filling reached max iterations at generation ${gen}`
+                );
+                break;
+            }
+
+            // Update population (optimized)
+            populations.length = 0;
+            populations.push(...nextPopulation);
+
+            // // SWAP Population
+            // for (let i = 0; i < nextPopulation.length; i++)
+            //     populations[i] = nextPopulation[i];
         }
 
         if (!bestChoromosome)

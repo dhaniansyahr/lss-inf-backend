@@ -77,7 +77,7 @@ export async function update(c: Context): Promise<TypedResponse> {
 
 export async function updateMeeting(c: Context): Promise<TypedResponse> {
     const data: JadwalMeetingDTO = await c.req.json();
-    const id = c.req.param("meetingId");
+    const id = c.req.param("id");
 
     const serviceResponse = await JadwalService.updateMeeting(id, data);
 

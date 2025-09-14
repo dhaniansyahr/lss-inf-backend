@@ -49,18 +49,6 @@ export async function validateRuangan(c: Context, next: Next) {
             )
         );
 
-    const lectureExists = await prisma.dosen.findUnique({
-        where: { nip: data.nipKepalaLab },
-    });
-
-    if (data.nipKepalaLab && !lectureExists)
-        invalidFields.push(
-            generateErrorStructure(
-                "nipKepalaLab",
-                "Kepala lab tidak ditemukan, sebagai dosen!"
-            )
-        );
-
     if (invalidFields.length !== 0)
         return response_bad_request(c, "Validation Error", invalidFields);
 
@@ -71,28 +59,26 @@ export async function validateAssignKepalaLab(c: Context, next: Next) {
     const data: AssignKepalaLabDTO = await c.req.json();
     const invalidFields: ErrorStructure[] = [];
 
-    if (!data.nama)
-        invalidFields.push(
-            generateErrorStructure("nama", "Nama kepala lab tidak boleh kosong")
-        );
-    if (!data.nip)
-        invalidFields.push(
-            generateErrorStructure("nip", "NIP kepala lab tidak boleh kosong")
-        );
-
-    if (invalidFields.length !== 0)
-        return response_bad_request(c, "Validation Error", invalidFields);
-
-    if (typeof data.nama !== "string")
+    if (!data.dosenId)
         invalidFields.push(
             generateErrorStructure(
-                "nama",
-                "Nama kepala lab harus berupa string"
+                "dosenId",
+                "Dosen kepala lab tidak boleh kosong"
             )
         );
-    if (typeof data.nip !== "string")
+
+    const dosenExist = await prisma.dosen.findUnique({
+        where: {
+            id: data.dosenId,
+        },
+    });
+
+    if (!dosenExist)
         invalidFields.push(
-            generateErrorStructure("nip", "NIP kepala lab harus berupa string")
+            generateErrorStructure(
+                "dosenId",
+                "Dosen kepala lab tidak ditemukan atau belum menjadi dosen pengajar!"
+            )
         );
 
     if (invalidFields.length !== 0)

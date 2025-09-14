@@ -11,6 +11,12 @@ PendaftaranAsistenLabRoutes.get(
     PendaftaranAsistenLabController.getAll
 );
 
+PendaftaranAsistenLabRoutes.get(
+    "/asisten",
+    AuthMiddleware.checkJwt,
+    PendaftaranAsistenLabController.getAllAsisten
+);
+
 PendaftaranAsistenLabRoutes.post(
     "/",
     AuthMiddleware.checkJwt,

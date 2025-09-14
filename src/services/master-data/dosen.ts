@@ -20,8 +20,28 @@ export async function create(
     data: DosenDTO
 ): Promise<ServiceResponse<CreateResponse>> {
     try {
+        const userLevel = await prisma.userLevels.findFirst({
+            where: {
+                name: "DOSEN",
+            },
+        });
+
+        if (!userLevel) {
+            return BadRequestWithMessage("User level dosen tidak ditemukan");
+        }
+
+        const hashedPassword = await bcrypt.hash(data.password, 12);
+
         const dosen = await prisma.dosen.create({
-            data,
+            data: {
+                id: ulid(),
+                nama: data.nama,
+                nip: data.nip,
+                email: data.email,
+                password: hashedPassword,
+                userLevelId: userLevel.id,
+                bidangMinat: data.bidangMinat,
+            },
         });
 
         return {
@@ -141,8 +161,8 @@ export async function bulkUpload(file: File): Promise<ServiceResponse<{}>> {
 
         const dosenData = await Promise.all(
             excelData.map(async (data) => {
-                const hashedPassword = await bcrypt.hash("dosen123", 12);
-                const email = namaToEmail(data.NAMA);
+                const hashedPassword = await bcrypt.hash(data.PASSWORD, 12);
+                const email = namaToEmail(data.EMAIL);
 
                 return {
                     id: ulid(),

@@ -3,7 +3,6 @@ import Logger from "$pkg/logger";
 import { ulid } from "ulid";
 import { BIDANG_MINAT, Dosen, Matakuliah, TYPE_MATKUL } from "@prisma/client";
 import bcrypt from "bcrypt";
-import { namaToEmail } from "$utils/strings.utils";
 
 /**
  * Helper function to find or create Matakuliah
@@ -12,7 +11,7 @@ export async function findOrCreateMatakuliah(
     kode: string,
     nama: string,
     defaultSks: number = 3
-): Promise<{ matakuliah: Matakuliah; isNew: boolean }> {
+): Promise<{ matakuliah: Matakuliah; isPractical: boolean }> {
     try {
         // Try to find existing matakuliah by kode
         let matakuliah = await prisma.matakuliah.findUnique({
@@ -33,15 +32,15 @@ export async function findOrCreateMatakuliah(
                     type: TYPE_MATKUL.WAJIB,
                     sks: defaultSks,
                     bidangMinat: BIDANG_MINAT.UMUM,
-                    isTeori: !nameContains,
+                    isTeori: nameContains ? false : true,
                     semester: 1,
                 },
             });
             Logger.info(`Created new matakuliah: ${kode} - ${nama}`);
-            return { matakuliah, isNew: true };
+            return { matakuliah, isPractical: nameContains };
         }
 
-        return { matakuliah, isNew: false };
+        return { matakuliah, isPractical: nameContains };
     } catch (error) {
         Logger.error(`Error in findOrCreateMatakuliah: ${error}`);
         throw error;
@@ -53,7 +52,8 @@ export async function findOrCreateMatakuliah(
  */
 export async function findOrCreateDosen(
     nama: string,
-    nip: string
+    nip: string,
+    email: string
 ): Promise<{ dosen: Dosen; isNew: boolean }> {
     try {
         // Find User Level for DOSEN
@@ -98,7 +98,7 @@ export async function findOrCreateDosen(
                     id: ulid(),
                     nama,
                     nip,
-                    email: namaToEmail(nama),
+                    email: email,
                     password: hashedPassword,
                     bidangMinat: BIDANG_MINAT.UMUM,
                     userLevelId: lectureRole.id,
@@ -118,7 +118,7 @@ export async function findOrCreateDosen(
  */
 export async function findOrCreateRuangan(
     nama: string,
-    lokasi: string = "Auto-generated from Excel"
+    lokasi: string = "-"
 ): Promise<{ ruangan: any; isNew: boolean }> {
     try {
         // Try to find existing ruangan
@@ -132,13 +132,17 @@ export async function findOrCreateRuangan(
 
         if (!ruangan) {
             // Create new ruangan
+
+            const capacity = nama.toLowerCase().includes("lab") ? 50 : 25;
+            const isLab = nama.toLowerCase().includes("lab");
+
             ruangan = await prisma.ruanganLaboratorium.create({
                 data: {
                     id: ulid(),
                     nama: nama.trim(),
                     lokasi: lokasi,
-                    kapasitas: 30,
-                    isLab: nama.toLowerCase().includes("lab"),
+                    kapasitas: capacity,
+                    isLab: isLab,
                     isActive: true,
                 },
             });

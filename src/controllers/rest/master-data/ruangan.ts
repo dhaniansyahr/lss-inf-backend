@@ -91,22 +91,6 @@ export async function assignKepalaRuangan(c: Context): Promise<TypedResponse> {
     );
 }
 
-export async function deleteByIds(c: Context): Promise<TypedResponse> {
-    const ids = c.req.query("ids") as string;
-
-    const serviceResponse = await RuanganService.deleteByIds(ids);
-
-    if (!serviceResponse.status) {
-        return handleServiceErrorWithResponse(c, serviceResponse);
-    }
-
-    return response_success(
-        c,
-        serviceResponse.data,
-        "Berhasil menghapus ruangan!"
-    );
-}
-
 export async function activate(c: Context): Promise<TypedResponse> {
     const id = c.req.param("id");
     const data: { isActive: boolean } = await c.req.json();

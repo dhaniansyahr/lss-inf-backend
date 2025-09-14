@@ -6,6 +6,8 @@ import { seedShift } from "./seedShift";
 import { seedRuanganLab } from "./seedRuangan";
 import { seedDosen } from "./seedDosen";
 import { seedAcl } from "./seedAcl";
+import { seedMataKuliah } from "./seedMataKuliah";
+import { seedMahasiswa } from "./seedMahasiswa";
 
 async function seed() {
     await seedUserLevels(prisma);
@@ -14,11 +16,11 @@ async function seed() {
     await seedShift(prisma);
     await seedDosen(prisma);
     await seedRuanganLab(prisma);
+    await seedMataKuliah(prisma);
+    await seedMahasiswa(prisma);
 
     // await seedRuangan(prisma);
-    // await seedMataKuliah(prisma);
     // await seedJadwal(prisma);
-    // await seedMahasiswa(prisma);
 }
 
 seed().then(() => {

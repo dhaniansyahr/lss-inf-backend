@@ -134,8 +134,6 @@ export async function getAclByUserLevelId(
 
         if (!acl) return INVALID_ID_SERVICE_RESPONSE;
 
-        console.log("ACL : ", acl);
-
         const formattedAcl = acl.reduce((acc: any, current: any) => {
             if (!acc[current.feature.name]) {
                 acc[current.feature.name] = {};

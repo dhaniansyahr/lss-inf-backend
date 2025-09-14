@@ -50,6 +50,24 @@ export async function getAll(c: Context): Promise<TypedResponse> {
     );
 }
 
+export async function getAllAsisten(c: Context): Promise<TypedResponse> {
+    const filters: FilteringQueryV2 = checkFilteringQueryV2(c);
+
+    const serviceResponse = await PendaftaranAsistenLabService.getAllAsisten(
+        filters
+    );
+
+    if (!serviceResponse.status) {
+        return handleServiceErrorWithResponse(c, serviceResponse);
+    }
+
+    return response_success(
+        c,
+        serviceResponse.data,
+        "Berhasil mengambil semua pendaftaran asisten lab!"
+    );
+}
+
 export async function update(c: Context): Promise<TypedResponse> {
     const data: PendaftaranAsistenLabDTO = await c.req.json();
     const id = c.req.param("id");

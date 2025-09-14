@@ -27,19 +27,45 @@ import {
 } from "./helpers/jadwal";
 import { DateTime } from "luxon";
 import { DAYS, geneticAlgorithm } from "./genetic-service";
-import { generateNipDosen, parseNameAndNip } from "$utils/strings.utils";
+import { generateNipDosen } from "$utils/strings.utils";
 
 async function checkScheduleHasConflict(
-    schedule: JadwalDTO
+    schedule: JadwalDTO,
+    excludeScheduleId?: string // Optional parameter to exclude current schedule when updating
 ): Promise<OverrideJadwalDTO[]> {
     let overrideData: OverrideJadwalDTO[] = [];
+    const academicPeriod = getAcademicPeriod();
 
-    // check Ruangan same day and shift
+    // Base where condition to exclude current schedule if updating
+    const baseWhereCondition = excludeScheduleId
+        ? {
+              NOT: { id: excludeScheduleId },
+              deletedAt: null, // Only check active schedules
+          }
+        : {
+              deletedAt: null, // Only check active schedules
+          };
+
+    // Check Ruangan same day and shift
     const ruanganSameDayAndShift = await prisma.jadwal.findFirst({
         where: {
+            ...baseWhereCondition,
             ruanganId: schedule.ruanganId,
             hari: schedule.hari,
             shiftId: schedule.shiftId,
+            semester: academicPeriod.semester,
+            tahun: academicPeriod.year,
+        },
+        include: {
+            matakuliah: {
+                select: { nama: true, kode: true },
+            },
+            ruangan: {
+                select: { nama: true },
+            },
+            shift: {
+                select: { startTime: true, endTime: true },
+            },
         },
     });
 
@@ -47,50 +73,112 @@ async function checkScheduleHasConflict(
         overrideData.push({
             id: ulid(),
             jadwalId: ruanganSameDayAndShift.id,
-            message: "Ruangan sudah ada jadwal pada hari dan shift yang sama!",
+            message: `Ruangan ${ruanganSameDayAndShift.ruangan.nama} sudah ada jadwal "${ruanganSameDayAndShift.matakuliah.nama}" pada hari ${schedule.hari} shift ${ruanganSameDayAndShift.shift.startTime}-${ruanganSameDayAndShift.shift.endTime}!`,
         });
     }
 
-    // check dosen same day and shift
+    // Check dosen same day and shift - more specific query
     const dosenSameDayAndShift = await prisma.jadwal.findFirst({
         where: {
+            ...baseWhereCondition,
+            hari: schedule.hari,
+            shiftId: schedule.shiftId,
+            semester: academicPeriod.semester,
+            tahun: academicPeriod.year,
             jadwalDosen: {
                 some: { dosenId: { in: schedule.dosenIds } },
+            },
+        },
+        include: {
+            matakuliah: {
+                select: { nama: true, kode: true },
+            },
+            ruangan: {
+                select: { nama: true },
+            },
+            shift: {
+                select: { startTime: true, endTime: true },
+            },
+            jadwalDosen: {
+                include: {
+                    dosen: {
+                        select: { nama: true, nip: true },
+                    },
+                },
             },
         },
     });
 
     if (dosenSameDayAndShift) {
+        // Get conflicting dosen names
+        const conflictingDosen = dosenSameDayAndShift.jadwalDosen
+            .filter((jd) => schedule.dosenIds.includes(jd.dosenId))
+            .map((jd) => jd.dosen.nama)
+            .join(", ");
+
         overrideData.push({
             id: ulid(),
             jadwalId: dosenSameDayAndShift.id,
-            message: "Dosen sudah ada jadwal pada hari dan shift yang sama!",
+            message: `Dosen ${conflictingDosen} sudah ada jadwal "${dosenSameDayAndShift.matakuliah.nama}" pada hari ${schedule.hari} shift ${dosenSameDayAndShift.shift.startTime}-${dosenSameDayAndShift.shift.endTime}!`,
         });
     }
 
-    // check ruangan, sam day, shift, and dosen
-    const ruanganSameDayAndShiftAndDosen = await prisma.jadwal.findFirst({
+    // Check if there are multiple conflicts (ruangan + dosen + same time)
+    // This is more comprehensive than the previous combined check
+    const combinedConflict = await prisma.jadwal.findFirst({
         where: {
+            ...baseWhereCondition,
             ruanganId: schedule.ruanganId,
             hari: schedule.hari,
             shiftId: schedule.shiftId,
+            semester: academicPeriod.semester,
+            tahun: academicPeriod.year,
             jadwalDosen: {
                 some: { dosenId: { in: schedule.dosenIds } },
             },
         },
+        include: {
+            matakuliah: {
+                select: { nama: true, kode: true },
+            },
+            ruangan: {
+                select: { nama: true },
+            },
+            shift: {
+                select: { startTime: true, endTime: true },
+            },
+            jadwalDosen: {
+                include: {
+                    dosen: {
+                        select: { nama: true },
+                    },
+                },
+            },
+        },
     });
 
-    if (ruanganSameDayAndShiftAndDosen) {
-        overrideData.push({
-            id: ulid(),
-            jadwalId: ruanganSameDayAndShiftAndDosen.id,
-            message: "Ruangan, dosen, dan hari yang sama sudah ada jadwal!",
-        });
+    if (combinedConflict) {
+        const conflictingDosen = combinedConflict.jadwalDosen
+            .filter((jd) => schedule.dosenIds.includes(jd.dosenId))
+            .map((jd) => jd.dosen.nama)
+            .join(", ");
+
+        // Only add if it's not already covered by the previous checks
+        const alreadyCovered = overrideData.some(
+            (override) => override.jadwalId === combinedConflict.id
+        );
+
+        if (!alreadyCovered) {
+            overrideData.push({
+                id: ulid(),
+                jadwalId: combinedConflict.id,
+                message: `Konflik lengkap: Ruangan ${combinedConflict.ruangan.nama} dan Dosen ${conflictingDosen} sudah ada jadwal "${combinedConflict.matakuliah.nama}" pada hari ${schedule.hari} shift ${combinedConflict.shift.startTime}-${combinedConflict.shift.endTime}!`,
+            });
+        }
     }
 
     return overrideData;
 }
-
 export async function createMeetingDates(
     hari: HARI,
     jadwalId: string
@@ -185,15 +273,22 @@ export async function create(
         if (!theoryData)
             return BadRequestWithMessage("Matakuliah teori tidak ditemukan!");
 
-        const theoryScheduleExists = await prisma.jadwal.findFirst({
-            where: { matakuliahId: theoryData.id },
-            include: {
-                jadwalDosen: true,
-            },
-        });
+        let dosenIds = data.dosenIds;
+        if (dosenIds.length === 0) {
+            const theoryScheduleExists = await prisma.jadwal.findFirst({
+                where: { matakuliahId: theoryData.id },
+                include: {
+                    jadwalDosen: true,
+                },
+            });
 
-        if (!theoryScheduleExists)
-            return BadRequestWithMessage("Jadwal teori tidak ditemukan!");
+            if (!theoryScheduleExists)
+                return BadRequestWithMessage("Jadwal teori tidak ditemukan!");
+
+            dosenIds = theoryScheduleExists.jadwalDosen.map(
+                (dosen) => dosen.dosenId
+            );
+        }
 
         const conflictData = await checkScheduleHasConflict(data);
 
@@ -222,12 +317,10 @@ export async function create(
                     kelas: data.kelas,
                     matakuliahId: data.matakuliahId,
                     jadwalDosen: {
-                        create: theoryScheduleExists.jadwalDosen.map(
-                            (dosen) => ({
-                                id: ulid(),
-                                dosenId: dosen.dosenId,
-                            })
-                        ),
+                        create: dosenIds.map((dosenId) => ({
+                            id: ulid(),
+                            dosenId: dosenId,
+                        })),
                     },
                     isOverride: conflictData.length > 0,
                 },
@@ -272,11 +365,11 @@ export async function getAll(
     try {
         const usedFilters = buildFilterQueryLimitOffsetV2(filters);
 
-        usedFilters.where = {
-            matakuliah: {
-                isTeori: false,
-            },
-        };
+        // usedFilters.where = {
+        //     matakuliah: {
+        //         isTeori: false,
+        //     },
+        // };
 
         usedFilters.include = {
             jadwalDosen: {
@@ -341,7 +434,11 @@ export async function getById(
                         mahasiswa: true,
                     },
                 },
-                meetings: true,
+                meetings: {
+                    orderBy: {
+                        pertemuan: "asc",
+                    },
+                },
                 overrideData: true,
                 ruangan: true,
                 matakuliah: true,
@@ -389,17 +486,20 @@ export async function update(
         if (!theoryData)
             return BadRequestWithMessage("Matakuliah teori tidak ditemukan!");
 
-        const theoryScheduleExists = await prisma.jadwal.findFirst({
-            where: { matakuliahId: theoryData.id },
-            include: {
-                jadwalDosen: true,
-            },
-        });
+        // let dosenIds = data.dosenIds;
+        // if (dosenIds.length === 0) {
+        //     const theoryScheduleExists = await prisma.jadwal.findFirst({
+        //         where: { matakuliahId: theoryData.id },
+        //         include: {
+        //             jadwalDosen: true,
+        //         },
+        //     });
 
-        if (!theoryScheduleExists)
-            return BadRequestWithMessage("Jadwal teori tidak ditemukan!");
+        //     if (!theoryScheduleExists)
+        //         return BadRequestWithMessage("Jadwal teori tidak ditemukan!");
+        // }
 
-        const conflictData = await checkScheduleHasConflict(data);
+        const conflictData = await checkScheduleHasConflict(data, id);
 
         if (conflictData.length > 0 && !data.isOverride) {
             return {
@@ -467,7 +567,7 @@ export async function bulkUploadTheory(file: File) {
                 data.Kode,
                 data.Nama
             );
-            const { ruangan } = await findOrCreateRuangan(data.Ruang, "");
+            const { ruangan } = await findOrCreateRuangan(data.Ruang, "-");
 
             const timeRange = data.Waktu.split("-");
             const startTime = timeRange[0];
@@ -475,16 +575,35 @@ export async function bulkUploadTheory(file: File) {
 
             const { shift } = await findOrCreateShift(startTime, endTime);
 
-            const coordinatorKelas = data["Koordinator Kelas"].trim();
-            const { name, nip } = parseNameAndNip(coordinatorKelas);
+            const classCoordinatorName = data["Koordinator Kelas"].trim();
+            const classCoordinatorNip = data.NIP_KOOR_KElAS
+                ? data.NIP_KOOR_KElAS.trim()
+                : data.NIP_KOOR_KElAS;
 
-            const dosenName = name;
-            const dosenNip = nip ? nip : generateNipDosen();
+            const dosenName = classCoordinatorName;
+            const dosenNip = classCoordinatorNip
+                ? classCoordinatorNip
+                : generateNipDosen();
 
-            const { dosen } = await findOrCreateDosen(dosenName, dosenNip);
+            const splitGelar = dosenName.split(",");
+            const nameWithoutGelar = splitGelar[0].trim();
+            const splitIfMoreThanOneWord = nameWithoutGelar.split(" ");
+            const joinWithUnderScore = splitIfMoreThanOneWord.join("_");
+            const email = joinWithUnderScore + "@usk.ac.id";
+
+            const { dosen } = await findOrCreateDosen(
+                dosenName,
+                dosenNip,
+                email
+            );
 
             if (matakuliah.isTeori) {
                 const scheduleId = ulid();
+                const hari =
+                    data.Hari.toUpperCase() === "-"
+                        ? HARI.SENIN
+                        : (data.Hari.toUpperCase() as HARI);
+
                 const schedule = await prisma.jadwal.create({
                     data: {
                         id: scheduleId,
@@ -492,10 +611,7 @@ export async function bulkUploadTheory(file: File) {
                         ruanganId: ruangan.id,
                         shiftId: shift.id,
                         kelas: data.Kelas,
-                        hari:
-                            data.Hari.toUpperCase() === "-"
-                                ? HARI.SENIN
-                                : (data.Hari.toUpperCase() as HARI),
+                        hari: hari,
                         semester: academicPeriod.semester,
                         tahun: academicPeriod.year,
                         jadwalDosen: {
@@ -577,12 +693,13 @@ export async function generateSchedule(): Promise<ServiceResponse<{}>> {
             return BadRequestWithMessage("Tidak ada solusi yang ditemukan!");
 
         // Persist Schedule
-        const schedules = await prisma.$transaction(async (tx) => {
-            const created: string[] = [];
+        const createdIds = await prisma.$transaction(async (tx) => {
+            const createdIds: string[] = [];
             const bestChr = (gaResult.data as any)?.bestChoromosome || [];
+
             for (const gene of bestChr) {
                 const jadwalId = ulid();
-                created.push(jadwalId);
+                createdIds.push(jadwalId);
 
                 await tx.jadwal.create({
                     data: {
@@ -604,15 +721,35 @@ export async function generateSchedule(): Promise<ServiceResponse<{}>> {
                         dosenId: gene.dosenId,
                     },
                 });
+
+                const meetingDates = await createMeetingDates(
+                    DAYS[gene.hariIdx] as any,
+                    jadwalId
+                );
+
+                await tx.meeting.createMany({
+                    data: meetingDates,
+                });
             }
 
-            return created;
+            return createdIds;
+        });
+
+        // Fetch the created schedules with full details
+        const schedules = await prisma.jadwal.findMany({
+            where: {
+                id: { in: createdIds },
+            },
+            include: {
+                matakuliah: true,
+            },
         });
 
         return {
             status: true,
             data: {
                 schedules,
+                totalSchedules: schedules.length,
                 bestScore: (gaResult.data as any)?.bestScore,
             },
         };
@@ -642,6 +779,69 @@ export async function updateMeeting(
             return BadRequestWithMessage(
                 "Pertemuan Pada Jadwal ini tidak ditemukan!"
             );
+
+        const now = DateTime.now();
+        const currentMeetingDate = DateTime.fromFormat(
+            meetingExists.tanggal,
+            "yyyy-MM-dd"
+        );
+        const newMeetingDate = DateTime.fromFormat(data.tanggal, "yyyy-MM-dd");
+
+        // Check if current meeting has already passed
+        const hasCurrentMeetingPassed = currentMeetingDate < now.startOf("day");
+        if (hasCurrentMeetingPassed) {
+            return BadRequestWithMessage(
+                "Tidak dapat mengubah pertemuan yang sudah berlalu!"
+            );
+        }
+
+        // Check if new meeting date is in the past
+        const isNewDateInPast = newMeetingDate < now.startOf("day");
+        if (isNewDateInPast) {
+            return BadRequestWithMessage(
+                "Tanggal pertemuan tidak boleh di masa lalu!"
+            );
+        }
+
+        // Check if trying to update less than 1 day before current meeting
+        const daysDifferenceFromNow = currentMeetingDate.diff(now, "days").days;
+        if (daysDifferenceFromNow < 1) {
+            return BadRequestWithMessage(
+                "Pertemuan hanya dapat diubah minimal 1 hari sebelum tanggal pertemuan saat ini!"
+            );
+        }
+
+        // Additional validation: Check if new date is too far in the future (optional)
+        const daysFromNowToNewDate = newMeetingDate.diff(now, "days").days;
+        if (daysFromNowToNewDate > 365) {
+            // Example: max 1 year ahead
+            return BadRequestWithMessage(
+                "Tanggal pertemuan tidak boleh lebih dari 1 tahun ke depan!"
+            );
+        }
+
+        // Check if there's already another meeting on the new date for the same schedule
+        const conflictingMeeting = await prisma.meeting.findFirst({
+            where: {
+                jadwalId: id,
+                tanggal: data.tanggal,
+                NOT: {
+                    id: data.meetingId, // Exclude current meeting
+                },
+            },
+        });
+
+        if (currentMeetingDate > newMeetingDate) {
+            return BadRequestWithMessage(
+                "Tanggal pertemuan tidak boleh kurang dari tangagl pertemuan saat ini!"
+            );
+        }
+
+        if (conflictingMeeting) {
+            return BadRequestWithMessage(
+                `Sudah ada pertemuan ke-${conflictingMeeting.pertemuan} pada tanggal ${data.tanggal}!`
+            );
+        }
 
         const updatedMeeting = await prisma.meeting.update({
             where: { id: data.meetingId },

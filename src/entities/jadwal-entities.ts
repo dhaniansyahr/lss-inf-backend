@@ -24,6 +24,7 @@ export interface JadwalExcelRowDTO {
     Nama: string;
     Kelas: string;
     "Koordinator Kelas": string;
+    NIP_KOOR_KElAS: string;
     Ruang: string;
     Hari: string;
     Waktu: string;

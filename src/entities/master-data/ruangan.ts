@@ -10,7 +10,5 @@ export interface RuanganDTO {
 }
 
 export interface AssignKepalaLabDTO {
-    id: string;
-    nama: string;
-    nip: string;
+    dosenId: string;
 }

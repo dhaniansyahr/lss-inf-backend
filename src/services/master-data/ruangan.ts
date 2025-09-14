@@ -150,69 +150,65 @@ export async function assignKepalaLab(
     try {
         const result = await prisma.$transaction(async (tx) => {
             // Check if room exists and is active
-            const existingRoom = await tx.ruanganLaboratorium.findUnique({
-                where: { id },
-                select: {
-                    id: true,
-                    isActive: true,
-                    kepalaLabId: true,
-                },
+            const ruangan = await tx.ruanganLaboratorium.findUnique({
+                where: { id, isActive: true },
+                include: { kepalaLab: true }, // Include current kepala lab info
             });
 
-            if (!existingRoom || !existingRoom.isActive) {
-                return INVALID_ID_SERVICE_RESPONSE;
+            if (!ruangan) {
+                return BadRequestWithMessage(
+                    "Ruangan tidak ditemukan atau tidak aktif!"
+                );
             }
 
-            // End current kepala lab assignment if exists
-            if (existingRoom.kepalaLabId) {
-                await tx.historyKepalaLab.updateMany({
+            // If there's already a kepala lab, close their history record
+            if (ruangan.kepalaLabId) {
+                // Find and close the current active history record
+                const activeHistory = await tx.historyKepalaLab.findFirst({
                     where: {
+                        kepalaLabId: ruangan.kepalaLabId,
                         ruanganLabId: id,
                         endDate: null,
                     },
-                    data: {
-                        endDate: DateTime.now().toFormat("yyyy-MM-dd"),
-                    },
                 });
+
+                if (activeHistory) {
+                    await tx.historyKepalaLab.update({
+                        where: { id: activeHistory.id },
+                        data: {
+                            endDate: DateTime.now().toJSDate(),
+                        },
+                    });
+                }
             }
 
-            // Check if kepala lab already exists, if not create new one
-            let kepalaLab = await tx.kepalaLab.findUnique({
-                where: { nip: data.nip },
-            });
-
-            if (!kepalaLab) {
-                kepalaLab = await tx.kepalaLab.create({
-                    data: {
-                        id: ulid(),
-                        nama: data.nama,
-                        nip: data.nip,
-                    },
-                });
-            }
-
-            // Create history entry
+            // Create new history record for the new kepala lab
             await tx.historyKepalaLab.create({
                 data: {
                     id: ulid(),
-                    kepalaLabId: kepalaLab.id,
+                    kepalaLabId: data.dosenId,
                     ruanganLabId: id,
-                    startDate: DateTime.fromJSDate(
-                        kepalaLab.createdAt
-                    ).toFormat("yyyy-MM-dd"),
-                    endDate: DateTime.now().toFormat("yyyy-MM-dd"),
+                    startDate: DateTime.now().toJSDate(),
                 },
             });
 
-            // Update the ruangan with the new kepala lab
-            const ruanganLaboratorium = await tx.ruanganLaboratorium.update({
+            // Update ruangan with new kepala lab
+            const updatedRuangan = await tx.ruanganLaboratorium.update({
                 where: { id },
                 data: {
-                    kepalaLabId: kepalaLab.id,
+                    kepalaLabId: data.dosenId,
+                },
+                include: {
+                    kepalaLab: true,
+                    historyKepalaLab: {
+                        include: {
+                            kepalaLab: true,
+                        },
+                    },
                 },
             });
 
-            return ruanganLaboratorium;
+            return updatedRuangan;
         });
 
         return {
@@ -222,44 +218,6 @@ export async function assignKepalaLab(
     } catch (err) {
         Logger.error(`RuanganLaboratoriumService.assignKepalaLab : ${err}`);
 
-        if (
-            err instanceof Error &&
-            err.message.includes("Record to update not found")
-        ) {
-            return INVALID_ID_SERVICE_RESPONSE;
-        }
-
-        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
-    }
-}
-
-export async function deleteByIds(ids: string): Promise<ServiceResponse<{}>> {
-    try {
-        const idArray: string[] = JSON.parse(ids);
-
-        // Check Relation Ruangan to Other Schedule
-        const jadwal = await prisma.jadwal.findMany({
-            where: {
-                ruanganId: { in: idArray },
-            },
-        });
-
-        if (jadwal.length > 0) {
-            return BadRequestWithMessage("Ruangan masih digunakan pada jadwal");
-        }
-
-        await prisma.ruanganLaboratorium.deleteMany({
-            where: {
-                id: { in: idArray },
-            },
-        });
-
-        return {
-            status: true,
-            data: {},
-        };
-    } catch (err) {
-        Logger.error(`RuanganLaboratoriumService.deleteByIds : ${err}`);
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }

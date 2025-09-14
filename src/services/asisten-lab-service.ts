@@ -9,6 +9,7 @@ import Logger from "$pkg/logger";
 import { prisma } from "$utils/prisma.utils";
 import {
     ASISTEN_LAB_STATUS,
+    AsistenLab,
     NILAI_MATAKULIAH,
     PendaftaranAsistenLab,
 } from "@prisma/client";
@@ -42,7 +43,7 @@ export async function create(
         // Check Registrations
         const registrations = await prisma.pendaftaranAsistenLab.findMany({
             where: {
-                mahasiswaId: data.mahasiswaId,
+                mahasiswaId: scheduleExists.matakuliahId,
                 jadwalId: data.jadwalId,
             },
         });
@@ -85,9 +86,26 @@ export async function getAll(
     try {
         const usedFilters = buildFilterQueryLimitOffsetV2(filters);
 
-        usedFilters.where = {
-            mahasiswaId: user.id,
-        };
+        const userLevel = await prisma.userLevels.findUnique({
+            where: { id: user.userLevelId },
+        });
+
+        if (!userLevel)
+            return BadRequestWithMessage("User Level Tidak Ditemukan!");
+
+        if (userLevel.name === "MAHASISWA") {
+            usedFilters.where = {
+                mahasiswaId: user.id,
+            };
+        } else if (userLevel.name === "DOSEN") {
+            usedFilters.where = {
+                jadwal: {
+                    jadwalDosen: {
+                        some: { dosenId: user.id },
+                    },
+                },
+            };
+        }
 
         const [pendaftaranAsistenLab, totalData] = await Promise.all([
             prisma.pendaftaranAsistenLab.findMany(usedFilters),
@@ -110,6 +128,38 @@ export async function getAll(
         };
     } catch (err) {
         Logger.error(`PendaftaranAsistenLabService.getAll : ${err} `);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}
+
+export type GetAllAsistenLabResponse = PagedList<AsistenLab[]> | {};
+export async function getAllAsisten(
+    filters: FilteringQueryV2
+): Promise<ServiceResponse<GetAllResponse>> {
+    try {
+        const usedFilters = buildFilterQueryLimitOffsetV2(filters);
+
+        const [asistenLab, totalData] = await Promise.all([
+            prisma.asistenLab.findMany(usedFilters),
+            prisma.asistenLab.count({
+                where: usedFilters.where,
+            }),
+        ]);
+
+        let totalPage = 1;
+        if (totalData > usedFilters.take)
+            totalPage = Math.ceil(totalData / usedFilters.take);
+
+        return {
+            status: true,
+            data: {
+                entries: asistenLab,
+                totalData,
+                totalPage,
+            },
+        };
+    } catch (err) {
+        Logger.error(`AsistenLabService.getAll : ${err} `);
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }

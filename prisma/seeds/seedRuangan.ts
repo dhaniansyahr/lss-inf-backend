@@ -148,15 +148,6 @@ export async function seedRuanganLab(prisma: PrismaClient) {
         const randomDosen =
             allDosen[Math.floor(Math.random() * allDosen.length)];
 
-        // Create kepala lab record first
-        const kepalaLab = await prisma.kepalaLab.create({
-            data: {
-                id: ulid(),
-                nama: randomDosen.nama,
-                nip: randomDosen.nip,
-            },
-        });
-
         const ruangan = await prisma.ruanganLaboratorium.create({
             data: {
                 id: ulid(),
@@ -165,14 +156,14 @@ export async function seedRuanganLab(prisma: PrismaClient) {
                 isActive: true,
                 isLab: true,
                 kapasitas: 25,
-                kepalaLabId: kepalaLab.id,
+                kepalaLabId: randomDosen.id,
             },
         });
 
         await prisma.historyKepalaLab.create({
             data: {
                 id: ulid(),
-                kepalaLabId: kepalaLab.id,
+                kepalaLabId: ruangan.kepalaLabId!,
                 ruanganLabId: ruangan.id,
                 startDate: new Date(),
             },

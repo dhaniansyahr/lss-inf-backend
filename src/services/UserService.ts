@@ -50,6 +50,10 @@ export async function getAll(
             },
         });
 
+        usedFilters.include = {
+            userLevel: true,
+        };
+
         const [user, totalData] = await Promise.all([
             prisma.user.findMany(usedFilters),
             prisma.user.count({

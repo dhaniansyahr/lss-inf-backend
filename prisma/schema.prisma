@@ -146,10 +146,12 @@ model Dosen {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  userLevel     UserLevels        @relation(fields: [userLevelId], references: [id])
-  dosenPengampu DosenPengampuMK[]
-  jadwalDosen   JadwalDosen[] // Junction table
-  absensi       Absensi[]
+  userLevel           UserLevels            @relation(fields: [userLevelId], references: [id])
+  dosenPengampu       DosenPengampuMK[]
+  jadwalDosen         JadwalDosen[] // Junction table
+  absensi             Absensi[]
+  RuanganLaboratorium RuanganLaboratorium[] @relation("KepalaLabRelation")
+  HistoryKepalaLab    HistoryKepalaLab[]
 }
 
 model Mahasiswa {
@@ -315,21 +317,10 @@ model RuanganLaboratorium {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  kepalaLab        KepalaLab?         @relation(fields: [kepalaLabId], references: [id])
-  historyKepalaLab HistoryKepalaLab[]
+  kepalaLab        Dosen?             @relation("KepalaLabRelation", fields: [kepalaLabId], references: [id])
+  historyKepalaLab HistoryKepalaLab[] @relation("RuanganKepalaLabHistory")
   jadwal           Jadwal[]
-}
-
-// Separated KepalaLab entity
-model KepalaLab {
-  id        String   @id
-  nama      String
-  nip       String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  ruanganLaboratorium RuanganLaboratorium[]
-  historyKepalaLab    HistoryKepalaLab[]
+  dosenId          String?
 }
 
 model HistoryKepalaLab {
@@ -341,8 +332,9 @@ model HistoryKepalaLab {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  kepalaLab  KepalaLab           @relation(fields: [kepalaLabId], references: [id])
-  ruanganLab RuanganLaboratorium @relation(fields: [ruanganLabId], references: [id])
+  ruanganLab RuanganLaboratorium @relation("RuanganKepalaLabHistory", fields: [ruanganLabId], references: [id])
+  kepalaLab  Dosen?              @relation(fields: [dosenId], references: [id])
+  dosenId    String?
 }
 
 model Holidays {

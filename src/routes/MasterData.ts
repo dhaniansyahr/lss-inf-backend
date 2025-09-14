@@ -51,16 +51,16 @@ MasterDataRoutes.get(
     AuthMiddleware.checkJwt,
     RuanganController.getAll
 );
-MasterDataRoutes.get(
-    "/ruangan/:id",
-    AuthMiddleware.checkJwt,
-    RuanganController.getById
-);
 MasterDataRoutes.post(
     "/ruangan",
     AuthMiddleware.checkJwt,
     RuanganValidation.validateRuangan,
     RuanganController.create
+);
+MasterDataRoutes.get(
+    "/ruangan/:id",
+    AuthMiddleware.checkJwt,
+    RuanganController.getById
 );
 MasterDataRoutes.put(
     "/ruangan/:id",
@@ -68,11 +68,13 @@ MasterDataRoutes.put(
     RuanganValidation.validateRuangan,
     RuanganController.update
 );
-MasterDataRoutes.delete(
-    "/ruangan",
+MasterDataRoutes.put(
+    "/ruangan/:id/assign-kepala-lab",
     AuthMiddleware.checkJwt,
-    RuanganController.deleteByIds
+    RuanganValidation.validateAssignKepalaLab,
+    RuanganController.assignKepalaRuangan
 );
+
 MasterDataRoutes.put(
     "/ruangan/:id/activate",
     AuthMiddleware.checkJwt,
@@ -164,7 +166,7 @@ MasterDataRoutes.post(
 MasterDataRoutes.put(
     "/dosen/:id",
     AuthMiddleware.checkJwt,
-    DosenValidation.validateDosen,
+    DosenValidation.validateDosenUpdate,
     DosenController.update
 );
 MasterDataRoutes.delete(
