@@ -5,7 +5,7 @@ name: Deploy to Develop Server
 
 on:
     push:
-        branches: [revamp]
+        branches: [main]
 
 jobs:
     test:
@@ -61,7 +61,7 @@ jobs:
                   port: ${{ secrets.PORT }}
                   script: |
                       cd tms-inf/backend-lss
-                      git add . && git stash && git fetch origin revamp && git pull
+                      git add . && git stash && git fetch origin main && git pull
                   continue-on-error: false
 
             - name: Install dependencies
