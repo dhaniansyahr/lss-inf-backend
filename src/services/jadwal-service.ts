@@ -859,3 +859,27 @@ export async function updateMeeting(
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }
+
+export type GetListMeetingsResponse = Meeting[] | {};
+export async function getListMeetings(
+    id: string
+): Promise<ServiceResponse<GetListMeetingsResponse>> {
+    try {
+        const meetings = await prisma.meeting.findMany({
+            where: {
+                jadwalId: id,
+            },
+        });
+
+        if (!meetings)
+            return BadRequestWithMessage("Pertemuan Tidak Ditemukan!");
+
+        return {
+            status: true,
+            data: meetings,
+        };
+    } catch (err) {
+        Logger.error(`JadwalService.getListMeetings : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}

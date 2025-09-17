@@ -86,3 +86,19 @@ export async function getAccess(c: Context) {
         "Berhasil mengambil access control list berdasarkan fitur!"
     );
 }
+
+export async function getAvailableFeatures(c: Context): Promise<TypedResponse> {
+    const user: UserJWTDAO = await c.get("jwtPayload");
+
+    const serviceResponse = await AclService.getAvailableFeatures(user);
+
+    if (!serviceResponse.status) {
+        return handleServiceErrorWithResponse(c, serviceResponse);
+    }
+
+    return response_success(
+        c,
+        serviceResponse.data,
+        "Berhasil mengambil fitur yang tersedia!"
+    );
+}

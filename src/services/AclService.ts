@@ -7,7 +7,7 @@ import {
 import Logger from "$pkg/logger";
 import { prisma } from "$utils/prisma.utils";
 import { Acl, Prisma } from "@prisma/client";
-import { AclDTO, CheckFeatureAccessDTO } from "$entities/Acl";
+import { AclDTO } from "$entities/Acl";
 import { ulid } from "ulid";
 import { UserJWTDAO } from "$entities/User";
 
@@ -134,19 +134,14 @@ export async function getAclByUserLevelId(
 
         if (!acl) return INVALID_ID_SERVICE_RESPONSE;
 
-        const formattedAcl = acl.reduce((acc: any, current: any) => {
-            if (!acc[current.feature.name]) {
-                acc[current.feature.name] = {};
-            }
-            current.feature.actions.forEach((action: any) => {
-                acc[current.feature.name][action.name] = true;
-            });
-            return acc;
-        }, {});
+        const formattedResponse = acl.map((item) => ({
+            featureName: item.feature.name,
+            actions: item.feature.actions.map((action) => action.name),
+        }));
 
         return {
             status: true,
-            data: formattedAcl,
+            data: formattedResponse,
         };
     } catch (err) {
         Logger.error(`AclService.getAclByUserLevelId : ${err}`);
@@ -286,71 +281,6 @@ export async function update(
     }
 }
 
-type getFeatureAccessResponse = CheckFeatureAccessDTO | {};
-
-export async function getFeatureAccess(
-    userLevelId: string,
-    featureName: string
-): Promise<ServiceResponse<getFeatureAccessResponse>> {
-    try {
-        // Input validation
-        if (!userLevelId || !featureName) {
-            return BadRequestWithMessage(
-                "User level ID and feature name are required"
-            );
-        }
-
-        // Check if feature exists
-        const feature = await prisma.features.findUnique({
-            where: { name: featureName },
-            select: { id: true, name: true },
-        });
-
-        if (!feature) {
-            return BadRequestWithMessage(`Feature '${featureName}' not found`);
-        }
-
-        // Get user's ACL for this specific feature
-        const userAcl = await prisma.acl.findMany({
-            where: {
-                userLevelId,
-                featureId: feature.id,
-            },
-            include: {
-                feature: {
-                    select: {
-                        name: true,
-                    },
-                },
-            },
-        });
-
-        // Get action details for this feature
-        const actionIds = userAcl.map((a) => a.actionId);
-        const actions = await prisma.actions.findMany({
-            where: {
-                id: { in: actionIds },
-            },
-            select: {
-                name: true,
-            },
-        });
-
-        const allowedActions = actions.map((a) => a.name);
-
-        return {
-            status: true,
-            data: {
-                featureName,
-                actions: allowedActions,
-            },
-        };
-    } catch (err) {
-        Logger.error(`AclService.getFeatureAccess : ${err}`);
-        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
-    }
-}
-
 export async function getAllFeatures(): Promise<ServiceResponse<{}>> {
     try {
         const features = await prisma.features.findMany({
@@ -443,6 +373,39 @@ export async function getAccess(
         };
     } catch (err) {
         Logger.error(`AclService.getAccess : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}
+
+export async function getAvailableFeatures(
+    user: UserJWTDAO
+): Promise<ServiceResponse<{}>> {
+    try {
+        const features = await prisma.acl.findMany({
+            where: {
+                userLevelId: user.userLevelId,
+            },
+            include: {
+                feature: {
+                    select: {
+                        name: true,
+                    },
+                },
+            },
+            distinct: ["featureId"],
+        });
+
+        if (!features)
+            return BadRequestWithMessage("Features Tidak Ditemukan!");
+
+        const formattedFeatures = features.map((acl) => acl.feature.name);
+
+        return {
+            status: true,
+            data: formattedFeatures,
+        };
+    } catch (err) {
+        Logger.error(`AclService.getAvailableFeatures : ${err}`);
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }

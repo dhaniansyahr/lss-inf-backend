@@ -35,6 +35,8 @@ router.route("/files", RoutesRegistry.UploadRoutes);
 
 router.route("/dashboard", RoutesRegistry.DashboardRoutes);
 
+router.route("/absensi", RoutesRegistry.AbsensiRoutes);
+
 router.get("/", (c: Context) => {
     return response_success(c, "main routes!");
 });

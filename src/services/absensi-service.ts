@@ -1,4 +1,4 @@
-import { RecordAttendanceDTO } from "$entities/Absensi";
+import { Participats, RecordAttendanceDTO } from "$entities/Absensi";
 import {
     BadRequestWithMessage,
     INTERNAL_SERVER_ERROR_SERVICE_RESPONSE,
@@ -7,7 +7,6 @@ import {
 import { UserJWTDAO } from "$entities/User";
 import Logger from "$pkg/logger";
 import { prisma } from "$utils/prisma.utils";
-import { getIdentityType } from "$utils/strings.utils";
 import { Absensi } from "@prisma/client";
 import { DateTime } from "luxon";
 import { ulid } from "ulid";
@@ -18,62 +17,53 @@ export async function getTodaySchedule(
 ): Promise<ServiceResponse<AbsentResponse>> {
     try {
         const today = DateTime.now().toFormat("yyyy-MM-dd");
-        const timeNow = DateTime.now().toFormat("HH:mm");
 
         // Get Jadwal
-        const jadwal = await prisma.jadwal.findMany({
+        const jadwal = await prisma.meeting.findMany({
             where: {
                 OR: [
                     {
-                        jadwalDosen: {
-                            some: {
-                                dosenId: user.id,
+                        jadwal: {
+                            jadwalDosen: {
+                                some: {
+                                    dosenId: user.id,
+                                },
                             },
                         },
                     },
                     {
-                        jadwalMahasiswa: {
-                            some: {
-                                mahasiswaId: user.id,
+                        jadwal: {
+                            jadwalMahasiswa: {
+                                some: {
+                                    mahasiswaId: user.id,
+                                },
                             },
                         },
                     },
                     {
-                        jadwalAsistenLab: {
-                            some: {
-                                asistenLabId: user.id,
+                        jadwal: {
+                            jadwalAsistenLab: {
+                                some: {
+                                    asistenLabId: user.id,
+                                },
                             },
                         },
                     },
                 ],
                 AND: [
                     {
-                        shift: {
-                            startTime: {
-                                lte: timeNow,
-                            },
-                            endTime: {
-                                gte: timeNow,
-                            },
-                        },
-                    },
-                    {
-                        meetings: {
-                            some: {
-                                tanggal: today,
-                            },
-                        },
+                        tanggal: today,
                     },
                 ],
             },
             include: {
-                meetings: true,
-                matakuliah: true,
-                shift: true,
-                ruangan: true,
-                jadwalAsistenLab: true,
-                jadwalDosen: true,
-                jadwalMahasiswa: true,
+                jadwal: {
+                    include: {
+                        matakuliah: true,
+                        shift: true,
+                        ruangan: true,
+                    },
+                },
             },
         });
 
@@ -97,14 +87,12 @@ export async function recordAttendance(
     data: RecordAttendanceDTO
 ): Promise<ServiceResponse<AttendanceResponse>> {
     try {
-        const { identity, meetingId } = data;
-
-        const checkIdentity = getIdentityType(identity);
+        const { identity, meetingId, type } = data;
 
         let absentExist: Absensi | null = null;
 
-        switch (checkIdentity) {
-            case "NPM":
+        switch (type) {
+            case "MAHASISWA":
                 const mahasiswa = await prisma.mahasiswa.findUnique({
                     where: { npm: identity },
                 });
@@ -126,15 +114,14 @@ export async function recordAttendance(
                     return updateAttendance(
                         identity,
                         meetingId,
-                        !absentExist.isPresent
+                        !absentExist.isPresent,
+                        "MAHASISWA"
                     );
                 } else {
-                    return createAttendance(identity, meetingId);
+                    return createAttendance(identity, meetingId, "MAHASISWA");
                 }
 
-                break;
-
-            case "NIP":
+            case "DOSEN":
                 const dosen = await prisma.dosen.findUnique({
                     where: { nip: identity },
                 });
@@ -151,16 +138,48 @@ export async function recordAttendance(
                     return updateAttendance(
                         identity,
                         meetingId,
-                        !absentExist.isPresent
+                        !absentExist.isPresent,
+                        "DOSEN"
                     );
                 } else {
-                    return createAttendance(identity, meetingId);
+                    return createAttendance(identity, meetingId, "DOSEN");
                 }
-                break;
+
+            case "ASISTEN_LAB":
+                const asistenLab = await prisma.asistenLab.findFirst({
+                    where: {
+                        mahasiswa: {
+                            npm: identity,
+                        },
+                    },
+                });
+
+                if (!asistenLab) {
+                    return BadRequestWithMessage(
+                        "Asisten Lab tidak ditemukan!"
+                    );
+                }
+
+                absentExist = await prisma.absensi.findFirst({
+                    where: {
+                        mahasiswaId: asistenLab.mahasiswaId,
+                        meetingId: meetingId,
+                    },
+                });
+
+                if (absentExist) {
+                    return updateAttendance(
+                        identity,
+                        meetingId,
+                        !absentExist.isPresent,
+                        "ASISTEN_LAB"
+                    );
+                } else {
+                    return createAttendance(identity, meetingId, "ASISTEN_LAB");
+                }
 
             default:
-                return BadRequestWithMessage("NPM atau NIP tidak valid!");
-                break;
+                return BadRequestWithMessage("Tipe absen tidak valid!");
         }
     } catch (error) {
         Logger.error(`AttendanceService.recordAttendance : ${error}`);
@@ -169,17 +188,15 @@ export async function recordAttendance(
 }
 
 type CreateAbsentResponse = Absensi | {};
-
 export async function createAttendance(
     identity: string,
-    meetingId: string
+    meetingId: string,
+    type: "MAHASISWA" | "DOSEN" | "ASISTEN_LAB"
 ): Promise<ServiceResponse<CreateAbsentResponse>> {
     try {
-        const checkIdentity = getIdentityType(identity);
-
         let absent = {};
 
-        if (checkIdentity === "NPM") {
+        if (type === "MAHASISWA") {
             const mahasiswa = await prisma.mahasiswa.findUnique({
                 where: { npm: identity },
             });
@@ -206,7 +223,7 @@ export async function createAttendance(
                     } pada ${DateTime.now().toFormat("dd MMMM yyyy HH:mm:ss")}`,
                 },
             });
-        } else if (checkIdentity === "NIP") {
+        } else if (type === "DOSEN") {
             const dosen = await prisma.dosen.findUnique({
                 where: { nip: identity },
             });
@@ -232,8 +249,35 @@ export async function createAttendance(
                     } pada ${DateTime.now().toFormat("dd MMMM yyyy HH:mm:ss")}`,
                 },
             });
+        } else if (type === "ASISTEN_LAB") {
+            const asistenLab = await prisma.asistenLab.findFirst({
+                where: { mahasiswa: { npm: identity } },
+            });
+
+            if (!asistenLab)
+                return BadRequestWithMessage("Asisten Lab tidak ditemukan!");
+
+            const meeting = await prisma.meeting.findUnique({
+                where: { id: meetingId },
+            });
+
+            if (!meeting)
+                return BadRequestWithMessage("Meeting tidak ditemukan!");
+
+            absent = await prisma.absensi.create({
+                data: {
+                    id: ulid(),
+                    mahasiswaId: asistenLab.mahasiswaId,
+                    meetingId,
+                    isPresent: true,
+                    waktuAbsen: DateTime.now().toJSDate(),
+                    keterangan: `Absen ke-${
+                        meeting.pertemuan
+                    } pada ${DateTime.now().toFormat("dd MMMM yyyy HH:mm:ss")}`,
+                },
+            });
         } else {
-            return BadRequestWithMessage("NPM atau NIP tidak valid!");
+            return BadRequestWithMessage("Tipe absen tidak valid!");
         }
 
         return {
@@ -247,18 +291,16 @@ export async function createAttendance(
 }
 
 type UpdateAbsentResponse = Absensi | {};
-
 export async function updateAttendance(
     identity: string,
     meetingId: string,
-    isPresent: boolean
+    isPresent: boolean,
+    type: "MAHASISWA" | "DOSEN" | "ASISTEN_LAB"
 ): Promise<ServiceResponse<UpdateAbsentResponse>> {
     try {
-        const checkIdentity = getIdentityType(identity);
-
         let absent = {};
 
-        if (checkIdentity === "NPM") {
+        if (type === "MAHASISWA") {
             const mahasiswa = await prisma.mahasiswa.findUnique({
                 where: { npm: identity },
             });
@@ -273,12 +315,16 @@ export async function updateAttendance(
             if (!meeting)
                 return BadRequestWithMessage("Meeting tidak ditemukan!");
 
+            const absensi = await prisma.absensi.findFirst({
+                where: { mahasiswaId: mahasiswa.id, meetingId: meetingId },
+            });
+
+            if (!absensi)
+                return BadRequestWithMessage("Absensi tidak ditemukan!");
+
             absent = await prisma.absensi.update({
-                where: { id: meetingId },
+                where: { id: absensi.id },
                 data: {
-                    id: ulid(),
-                    mahasiswaId: mahasiswa.id,
-                    meetingId,
                     isPresent,
                     waktuAbsen: DateTime.now().toJSDate(),
                     keterangan: `Absen ke-${
@@ -288,7 +334,7 @@ export async function updateAttendance(
                     )}`,
                 },
             });
-        } else if (checkIdentity === "NIP") {
+        } else if (type === "DOSEN") {
             const dosen = await prisma.dosen.findUnique({
                 where: { nip: identity },
             });
@@ -302,12 +348,53 @@ export async function updateAttendance(
             if (!meeting)
                 return BadRequestWithMessage("Meeting tidak ditemukan!");
 
+            const absensi = await prisma.absensi.findFirst({
+                where: { dosenId: dosen.id, meetingId: meetingId },
+            });
+
+            if (!absensi)
+                return BadRequestWithMessage("Absensi tidak ditemukan!");
+
             absent = await prisma.absensi.update({
-                where: { id: meetingId },
+                where: { id: absensi.id },
                 data: {
-                    id: ulid(),
-                    dosenId: dosen.id,
-                    meetingId,
+                    isPresent,
+                    waktuAbsen: DateTime.now().toJSDate(),
+                    keterangan: `Absen ke-${
+                        meeting.pertemuan
+                    } di perbaharui pada ${DateTime.now().toFormat(
+                        "dd MMMM yyyy HH:mm:ss"
+                    )}`,
+                },
+            });
+        } else if (type === "ASISTEN_LAB") {
+            const asistenLab = await prisma.asistenLab.findFirst({
+                where: { mahasiswa: { npm: identity } },
+            });
+
+            if (!asistenLab)
+                return BadRequestWithMessage("Asisten Lab tidak ditemukan!");
+
+            const meeting = await prisma.meeting.findUnique({
+                where: { id: meetingId },
+            });
+
+            if (!meeting)
+                return BadRequestWithMessage("Meeting tidak ditemukan!");
+
+            const absensi = await prisma.absensi.findFirst({
+                where: {
+                    mahasiswaId: asistenLab.mahasiswaId,
+                    meetingId: meetingId,
+                },
+            });
+
+            if (!absensi)
+                return BadRequestWithMessage("Absensi tidak ditemukan!");
+
+            absent = await prisma.absensi.update({
+                where: { id: absensi.id },
+                data: {
                     isPresent,
                     waktuAbsen: DateTime.now().toJSDate(),
                     keterangan: `Absen ke-${
@@ -318,7 +405,7 @@ export async function updateAttendance(
                 },
             });
         } else {
-            return BadRequestWithMessage("NPM atau NIP tidak valid!");
+            return BadRequestWithMessage("Tipe absen tidak valid!");
         }
 
         return {
@@ -327,6 +414,86 @@ export async function updateAttendance(
         };
     } catch (error) {
         Logger.error(`AttendanceService.createAttendance : ${error}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}
+
+export async function getById(id: string): Promise<ServiceResponse<{}>> {
+    try {
+        const meetings = await prisma.meeting.findMany({
+            where: {
+                jadwalId: id,
+            },
+        });
+
+        if (!meetings)
+            return BadRequestWithMessage("Pertemuan Tidak Ditemukan!");
+
+        const jadwal = await prisma.jadwal.findUnique({
+            where: { id },
+            include: {
+                jadwalDosen: {
+                    include: {
+                        dosen: true,
+                    },
+                },
+                jadwalAsistenLab: {
+                    include: {
+                        asistenLab: {
+                            include: {
+                                mahasiswa: true,
+                            },
+                        },
+                    },
+                },
+                jadwalMahasiswa: {
+                    include: {
+                        mahasiswa: true,
+                    },
+                },
+            },
+        });
+
+        if (!jadwal) return BadRequestWithMessage("Jadwal Tidak Ditemukan!");
+
+        const participants: Participats[] = [];
+
+        jadwal.jadwalDosen.forEach((item) => {
+            participants.push({
+                id: item.dosen.id,
+                name: item.dosen.nama,
+                noIdentitas: item.dosen.nip,
+                type: "DOSEN",
+            });
+        });
+
+        jadwal.jadwalAsistenLab.forEach((item) => {
+            participants.push({
+                id: item.asistenLab.id,
+                name: item.asistenLab.mahasiswa.nama,
+                noIdentitas: item.asistenLab.mahasiswa.npm,
+                type: "ASISTEN_LAB",
+            });
+        });
+
+        jadwal.jadwalMahasiswa.forEach((item) => {
+            participants.push({
+                id: item.mahasiswa.id,
+                name: item.mahasiswa.nama,
+                noIdentitas: item.mahasiswa.npm,
+                type: "MAHASISWA",
+            });
+        });
+
+        return {
+            status: true,
+            data: {
+                meetings,
+                participants,
+            },
+        };
+    } catch (err) {
+        Logger.error(`DosenService.getById : ${err}`);
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }

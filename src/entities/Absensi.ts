@@ -30,4 +30,12 @@ export interface TodayScheduleForAttendance {
 export interface RecordAttendanceDTO {
     identity: string;
     meetingId: string;
+    type: "DOSEN" | "MAHASISWA" | "ASISTEN_LAB";
+}
+
+export interface Participats {
+    id: string;
+    name: string;
+    noIdentitas: string;
+    type: "DOSEN" | "MAHASISWA" | "ASISTEN_LAB";
 }

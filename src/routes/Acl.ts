@@ -14,6 +14,12 @@ AclRoutes.get(
 );
 
 AclRoutes.get(
+    "/available-features",
+    AuthMiddleware.checkJwt,
+    AclController.getAvailableFeatures
+);
+
+AclRoutes.get(
     "/:userLevelId",
     AuthMiddleware.checkJwt,
     AclController.getByUserLevelId

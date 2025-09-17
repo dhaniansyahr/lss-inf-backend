@@ -39,6 +39,12 @@ JadwalRoutes.post(
 
 JadwalRoutes.get("/:id", AuthMiddleware.checkJwt, JadwalController.getById);
 
+JadwalRoutes.get(
+    "/:id/list-meeting",
+    AuthMiddleware.checkJwt,
+    JadwalController.getListMeetings
+);
+
 JadwalRoutes.put(
     "/:id",
     AuthMiddleware.checkJwt,

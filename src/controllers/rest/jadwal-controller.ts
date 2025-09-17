@@ -172,3 +172,19 @@ export async function generateSchedule(c: Context): Promise<TypedResponse> {
         "Berhasil membuat jadwal untuk semua mata kuliah yang tersedia!"
     );
 }
+
+export async function getListMeetings(c: Context): Promise<TypedResponse> {
+    const id = c.req.param("id");
+
+    const serviceResponse = await JadwalService.getListMeetings(id);
+
+    if (!serviceResponse.status) {
+        return handleServiceErrorWithResponse(c, serviceResponse);
+    }
+
+    return response_success(
+        c,
+        serviceResponse.data,
+        "Berhasil mengambil list pertemuan!"
+    );
+}
