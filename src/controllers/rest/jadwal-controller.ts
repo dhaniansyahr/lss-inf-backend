@@ -7,7 +7,11 @@ import {
 } from "$utils/response.utils";
 import { FilteringQueryV2 } from "$entities/Query";
 import { checkFilteringQueryV2 } from "$controllers/helpers/CheckFilteringQuery";
-import { JadwalDTO, JadwalMeetingDTO } from "$entities/jadwal-entities";
+import {
+    JadwalDTO,
+    JadwalMeetingDTO,
+    ManualAssignMahasiswaDTO,
+} from "$entities/jadwal-entities";
 import * as JadwalService from "$services/jadwal-service";
 
 export async function create(c: Context): Promise<TypedResponse> {
@@ -92,6 +96,25 @@ export async function updateMeeting(c: Context): Promise<TypedResponse> {
     );
 }
 
+export async function manualAssignMahasiswa(
+    c: Context
+): Promise<TypedResponse> {
+    const data: ManualAssignMahasiswaDTO = await c.req.json();
+    const id = c.req.param("id");
+
+    const serviceResponse = await JadwalService.manualAssignMahasiswa(id, data);
+
+    if (!serviceResponse.status) {
+        return handleServiceErrorWithResponse(c, serviceResponse);
+    }
+
+    return response_success(
+        c,
+        serviceResponse.data,
+        "Berhasil Memperbaharui Mahasiswa pada Jadwal!"
+    );
+}
+
 export async function bulkUploadTheorySchedule(
     c: Context
 ): Promise<TypedResponse> {
@@ -170,6 +193,42 @@ export async function generateSchedule(c: Context): Promise<TypedResponse> {
         c,
         serviceResponse.data,
         "Berhasil membuat jadwal untuk semua mata kuliah yang tersedia!"
+    );
+}
+
+export async function bulkUploadMahasiswa(c: Context): Promise<TypedResponse> {
+    const jadwalId = c.req.param("id");
+    const bodyData = await c.req.parseBody();
+    const file = bodyData.file as File;
+
+    if (!file) {
+        return response_bad_request(c, "File Excel wajib diisi");
+    }
+
+    // Check file type
+    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+        return response_bad_request(
+            c,
+            "File harus berupa file Excel (.xlsx atau .xls)"
+        );
+    }
+
+    // Check file size (5MB limit for Excel files)
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    if (file.size > MAX_FILE_SIZE) {
+        return response_bad_request(c, "Ukuran file harus kurang dari 5MB");
+    }
+
+    const serviceResponse = await JadwalService.bulkUpload(jadwalId, file);
+
+    if (!serviceResponse.status) {
+        return handleServiceErrorWithResponse(c, serviceResponse);
+    }
+
+    return response_created(
+        c,
+        serviceResponse.data,
+        "Berhasil mengassign mahasiswa ke jadwal!"
     );
 }
 

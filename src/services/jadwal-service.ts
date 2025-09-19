@@ -7,9 +7,11 @@ import {
 import Logger from "$pkg/logger";
 import { HARI, Jadwal, Meeting } from "@prisma/client";
 import {
+    AssignMahasiswaExcelDTO,
     JadwalDTO,
     JadwalExcelRowDTO,
     JadwalMeetingDTO,
+    ManualAssignMahasiswaDTO,
     OverrideJadwalDTO,
 } from "$entities/jadwal-entities";
 import { prisma } from "$utils/prisma.utils";
@@ -686,8 +688,25 @@ export async function deleteAll(): Promise<ServiceResponse<{}>> {
 
 export async function generateSchedule(): Promise<ServiceResponse<{}>> {
     try {
-        const gaResult = await geneticAlgorithm();
         const academicPeriod = getAcademicPeriod();
+
+        const existingSchedules = await prisma.jadwal.findFirst({
+            where: {
+                semester: academicPeriod.semester,
+                tahun: academicPeriod.year,
+                matakuliah: {
+                    isTeori: false, // Only check for practical courses (lab schedules)
+                },
+            },
+        });
+
+        if (existingSchedules) {
+            return BadRequestWithMessage(
+                `Mohon maaf, Jadwal praktikum untuk semester ${academicPeriod.semester} tahun ${academicPeriod.year} sudah pernah digenerate.`
+            );
+        }
+
+        const gaResult = await geneticAlgorithm();
 
         if (!(gaResult.data as any)?.bestChoromosome)
             return BadRequestWithMessage("Tidak ada solusi yang ditemukan!");
@@ -880,6 +899,139 @@ export async function getListMeetings(
         };
     } catch (err) {
         Logger.error(`JadwalService.getListMeetings : ${err}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}
+
+export async function manualAssignMahasiswa(
+    id: string,
+    data: ManualAssignMahasiswaDTO
+): Promise<ServiceResponse<{}>> {
+    try {
+        console.log("manualAssignMahasiswa", id, data);
+        const jadwal = await prisma.jadwal.findUnique({
+            where: { id },
+        });
+
+        if (!jadwal) return INVALID_ID_SERVICE_RESPONSE;
+
+        const mahasiswaIds = data.mahasiswaIds;
+
+        const mahasiswaExists = await prisma.mahasiswa.findMany({
+            where: { id: { in: mahasiswaIds } },
+        });
+
+        if (mahasiswaExists.length !== mahasiswaIds.length) {
+            return BadRequestWithMessage("Mahasiswa tidak ditemukan!");
+        }
+
+        const mahasiswaNotActive = mahasiswaExists.filter(
+            (mahasiswa) => !mahasiswa.isActive
+        );
+
+        if (mahasiswaNotActive.length > 0) {
+            return BadRequestWithMessage(
+                "Mahasiswa tidak aktif tidak dapat diassign ke jadwal!"
+            );
+        }
+
+        const updatedJadwal = await prisma.jadwal.update({
+            where: { id },
+            data: {
+                jadwalMahasiswa: {
+                    create: mahasiswaIds.map((mahasiswaId) => ({
+                        id: ulid(),
+                        mahasiswaId,
+                    })),
+                },
+            },
+        });
+
+        return {
+            status: true,
+            data: updatedJadwal,
+        };
+    } catch (error) {
+        Logger.error(`JadwalService.manualAssignMahasiswa : ${error}`);
+        return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
+    }
+}
+
+export async function bulkUpload(
+    jadwalId: string,
+    file: File
+): Promise<ServiceResponse<{}>> {
+    try {
+        // Check if jadwal exists
+        const jadwal = await prisma.jadwal.findUnique({
+            where: { id: jadwalId },
+        });
+
+        if (!jadwal) {
+            return BadRequestWithMessage("Jadwal tidak ditemukan!");
+        }
+
+        const excelData = await readExcelFile<AssignMahasiswaExcelDTO>(file);
+
+        if (excelData.length === 0) {
+            return BadRequestWithMessage(
+                "Tidak ada data dalam file tersebut, silakan cek kembali file yang anda masukan"
+            );
+        }
+
+        // Process mahasiswa data and validate
+        const mahasiswaValidation = await Promise.all(
+            excelData.map(async (data) => {
+                const mhs = await prisma.mahasiswa.findUnique({
+                    where: { npm: String(data.NPM) },
+                });
+
+                if (!mhs) {
+                    throw new Error(
+                        `Mahasiswa dengan NPM ${data.NPM} tidak ditemukan!`
+                    );
+                }
+
+                if (!mhs.isActive) {
+                    throw new Error(
+                        `Mahasiswa dengan NPM ${data.NPM} tidak aktif!`
+                    );
+                }
+
+                return mhs;
+            })
+        );
+
+        // Use transaction to assign mahasiswa to jadwal
+        const result = await prisma.$transaction(async (tx) => {
+            await tx.jadwalMahasiswa.deleteMany({
+                where: { jadwalId },
+            });
+
+            const assignments = await tx.jadwalMahasiswa.createMany({
+                data: mahasiswaValidation.map((mhs) => ({
+                    id: ulid(),
+                    jadwalId,
+                    mahasiswaId: mhs.id,
+                })),
+            });
+
+            return assignments;
+        });
+
+        return {
+            status: true,
+            data: {
+                assignedCount: result.count,
+                totalMahasiswa: mahasiswaValidation.length,
+                jadwalId,
+            },
+        };
+    } catch (err) {
+        Logger.error(`JadwalService.bulkUpload : ${err}`);
+        if (err instanceof Error) {
+            return BadRequestWithMessage(err.message);
+        }
         return INTERNAL_SERVER_ERROR_SERVICE_RESPONSE;
     }
 }

@@ -34,3 +34,12 @@ export interface JadwalMeetingDTO {
     meetingId: string;
     tanggal: string;
 }
+
+export interface ManualAssignMahasiswaDTO {
+    mahasiswaIds: string[];
+}
+
+export interface AssignMahasiswaExcelDTO {
+    NPM: string;
+    KODE_MK: string;
+}

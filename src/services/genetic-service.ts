@@ -150,7 +150,7 @@ export async function getShiftsAndRooms() {
     const [shifts, rooms] = await Promise.all([
         await prisma.shift.findMany({ where: { isActive: true } }),
         await prisma.ruanganLaboratorium.findMany({
-            where: { isActive: true },
+            where: { isActive: true, isLab: true },
         }),
     ]);
 

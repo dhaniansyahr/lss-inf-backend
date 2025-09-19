@@ -11,6 +11,7 @@ import * as ShiftValidation from "$validations/master-data/shift";
 import * as RuanganValidation from "$validations/master-data/ruangan";
 import * as MataKuliahValidation from "$validations/master-data/matakuliah";
 import * as DosenValidation from "$validations/master-data/dosen";
+import * as MahasiswaValidation from "$validations/master-data/mahasiswa";
 
 const MasterDataRoutes = new Hono();
 
@@ -131,11 +132,13 @@ MasterDataRoutes.get(
 MasterDataRoutes.post(
     "/mahasiswa",
     AuthMiddleware.checkJwt,
+    MahasiswaValidation.validateMahasiswa,
     MahasiswaController.create
 );
 MasterDataRoutes.put(
     "/mahasiswa/:id",
     AuthMiddleware.checkJwt,
+    MahasiswaValidation.validateMahasiswa,
     MahasiswaController.update
 );
 MasterDataRoutes.delete(

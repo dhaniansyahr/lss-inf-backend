@@ -20,85 +20,53 @@ export async function seedAcl(prisma: PrismaClient) {
             permissions: [
                 {
                     subject: "DASHBOARD",
-                    action: ["read", "analytics", "absensi"],
-                },
-                {
-                    subject: "MASTER_DATA",
-                    action: ["read", "create", "update", "delete"],
-                },
-                {
-                    subject: "MATA_KULIAH",
-                    action: ["read", "create", "update", "delete"],
-                },
-                {
-                    subject: "MAHASISWA",
-                    action: ["read", "create", "update", "delete"],
-                },
-                {
-                    subject: "DOSEN",
-                    action: ["read", "create", "update", "delete"],
-                },
-                {
-                    subject: "RUANGAN_LABORATORIUM",
-                    action: [
-                        "read",
-                        "create",
-                        "update",
-                        "delete",
-                        "change_kepala_lab",
-                    ],
-                },
-                {
-                    subject: "KEPALA_LAB",
-                    action: ["read", "create", "update", "delete"],
+                    action: ["VIEW"],
                 },
                 {
                     subject: "SHIFT",
-                    action: ["read", "create", "update", "delete"],
+                    action: ["VIEW", "CREATE", "UPDATE", "DELETE"],
+                },
+                {
+                    subject: "RUANGAN",
+                    action: ["VIEW", "CREATE", "UPDATE", "DELETE", "ASSIGN"],
+                },
+                {
+                    subject: "MATA_KULIAH",
+                    action: ["VIEW", "CREATE", "UPDATE", "DELETE", "BULK"],
+                },
+                {
+                    subject: "MAHASISWA",
+                    action: ["VIEW", "CREATE", "UPDATE", "DELETE", "BULK"],
+                },
+                {
+                    subject: "DOSEN",
+                    action: ["VIEW", "CREATE", "UPDATE", "DELETE", "BULK"],
                 },
                 {
                     subject: "JADWAL",
                     action: [
-                        "read",
-                        "create",
-                        "update",
-                        "delete",
-                        "generate",
-                        "assign",
-                        "absensi",
+                        "VIEW",
+                        "CREATE",
+                        "UPDATE",
+                        "DELETE",
+                        "GENERATE",
+                        "UPDATE_MEETING",
+                        "ASSIGN_MAHASISWA",
+                        "ASSIGN_ASISTEN_LAB",
+                        "ABSENT",
                     ],
                 },
                 {
                     subject: "ASISTEN_LAB",
-                    action: ["read", "create", "update", "delete"],
-                },
-                {
-                    subject: "PENDAFTARAN_ASISTEN_LAB",
-                    action: ["read", "create", "update", "delete"],
-                },
-                {
-                    subject: "PENERIMAAN_ASISTEN_LAB",
-                    action: ["read", "create", "update", "delete"],
-                },
-                {
-                    subject: "ABSENSI",
-                    action: ["read", "create", "update", "delete"],
-                },
-                {
-                    subject: "MEETING",
-                    action: ["read", "create", "update", "delete"],
-                },
-                {
-                    subject: "HOLIDAYS",
-                    action: ["read", "create", "update", "delete"],
+                    action: ["VIEW", "CREATE", "UPDATE", "ACCEPTED"],
                 },
                 {
                     subject: "ROLE_MANAGEMENT",
-                    action: ["read", "create", "update", "delete", "duplicate"],
+                    action: ["VIEW", "CREATE", "UPDATE", "DELETE"],
                 },
                 {
                     subject: "USER_MANAGEMENT",
-                    action: ["read", "create", "update", "delete"],
+                    action: ["VIEW", "CREATE", "UPDATE", "DELETE"],
                 },
             ],
         },
@@ -107,27 +75,15 @@ export async function seedAcl(prisma: PrismaClient) {
             permissions: [
                 {
                     subject: "DASHBOARD",
-                    action: ["read", "analytics", "absensi"],
+                    action: ["VIEW"],
                 },
                 {
                     subject: "JADWAL",
-                    action: ["read", "update"],
+                    action: ["VIEW", "UPDATE"],
                 },
                 {
                     subject: "ASISTEN_LAB",
-                    action: ["read"],
-                },
-                {
-                    subject: "PENERIMAAN_ASISTEN_LAB",
-                    action: ["read", "create", "update"],
-                },
-                {
-                    subject: "ABSENSI",
-                    action: ["read", "create", "update"],
-                },
-                {
-                    subject: "MEETING",
-                    action: ["read", "create", "update"],
+                    action: ["VIEW", "ACCEPTED"],
                 },
             ],
         },
@@ -136,19 +92,15 @@ export async function seedAcl(prisma: PrismaClient) {
             permissions: [
                 {
                     subject: "DASHBOARD",
-                    action: ["read", "absensi"],
+                    action: ["VIEW"],
                 },
                 {
                     subject: "JADWAL",
-                    action: ["read"],
+                    action: ["VIEW"],
                 },
                 {
-                    subject: "PENDAFTARAN_ASISTEN_LAB",
-                    action: ["read", "create"],
-                },
-                {
-                    subject: "ABSENSI",
-                    action: ["read"],
+                    subject: "ASISTEN_LAB",
+                    action: ["VIEW", "CREATE", "UPDATE"],
                 },
             ],
         },

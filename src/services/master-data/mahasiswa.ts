@@ -12,7 +12,6 @@ import { buildFilterQueryLimitOffsetV2 } from "$services/helpers/FilterQueryV2";
 import { readExcelFile } from "$utils/upload-file.utils";
 import { ulid } from "ulid";
 import bcrypt from "bcrypt";
-import { namaToEmail } from "$utils/strings.utils";
 import {
     MahasiswaDTO,
     MahasiswaExcelDTO,
@@ -23,8 +22,29 @@ export async function create(
     data: MahasiswaDTO
 ): Promise<ServiceResponse<CreateResponse>> {
     try {
+        const userLevel = await prisma.userLevels.findFirst({
+            where: { name: "MAHASISWA" },
+        });
+
+        if (!userLevel) {
+            return BadRequestWithMessage(
+                "User level mahasiswa tidak ditemukan"
+            );
+        }
+
+        const hashedPassword = await bcrypt.hash(data.password, 12);
+
         const mahasiswa = await prisma.mahasiswa.create({
-            data,
+            data: {
+                id: ulid(),
+                nama: data.nama,
+                npm: data.npm,
+                semester: data.semester,
+                password: hashedPassword,
+                tahunMasuk: data.tahunMasuk,
+                isActive: true,
+                userLevelId: userLevel.id,
+            },
         });
 
         return {
@@ -108,7 +128,13 @@ export async function update(
 
         const mahasiswa = await prisma.mahasiswa.update({
             where: { id },
-            data,
+            data: {
+                nama: data.nama,
+                npm: data.npm,
+                semester: data.semester,
+                tahunMasuk: data.tahunMasuk,
+                isActive: data.isActive,
+            },
         });
 
         return {
@@ -146,17 +172,15 @@ export async function bulkUpload(file: File): Promise<ServiceResponse<{}>> {
         const mahasiswaData = await Promise.all(
             excelData.map(async (data) => {
                 const hashedPassword = await bcrypt.hash("mahasiswa123", 12);
-                const email = namaToEmail(data.NAMA);
 
                 return {
                     id: ulid(),
                     nama: data.NAMA,
-                    npm: data.NPM,
+                    npm: String(data.NPM),
                     semester: data.SEMESTER,
                     tahunMasuk: data.TAHUN_MASUK,
                     isActive: data.IS_ACTIVE,
                     userLevelId: userLevel.id,
-                    email: email,
                     password: hashedPassword,
                 };
             })
