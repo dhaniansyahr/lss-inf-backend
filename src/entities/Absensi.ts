@@ -38,4 +38,7 @@ export interface Participats {
     name: string;
     noIdentitas: string;
     type: "DOSEN" | "MAHASISWA" | "ASISTEN_LAB";
+    meetings: {
+        [key: string]: string | boolean;
+    };
 }

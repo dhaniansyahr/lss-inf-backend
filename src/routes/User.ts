@@ -8,21 +8,21 @@ const UserRoutes = new Hono();
 UserRoutes.get(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
+    AuthMiddleware.checkAccess("USER_MANAGEMENT", "VIEW"),
     UserController.getAll
 );
 
 UserRoutes.get(
     "/:id",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "read"),
+    AuthMiddleware.checkAccess("USER_MANAGEMENT", "VIEW"),
     UserController.getById
 );
 
 UserRoutes.post(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "create"),
+    AuthMiddleware.checkAccess("USER_MANAGEMENT", "CREATE"),
     UserValidation.validateUser,
     UserController.create
 );
@@ -30,7 +30,7 @@ UserRoutes.post(
 UserRoutes.put(
     "/:id",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "update"),
+    AuthMiddleware.checkAccess("USER_MANAGEMENT", "UPDATE"),
     UserValidation.validateUserUpdate,
     UserController.update
 );
@@ -38,7 +38,7 @@ UserRoutes.put(
 UserRoutes.delete(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("MASTER_DATA", "delete"),
+    AuthMiddleware.checkAccess("USER_MANAGEMENT", "DELETE"),
     UserController.deleteByIds
 );
 

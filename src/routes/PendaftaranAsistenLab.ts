@@ -8,18 +8,21 @@ const PendaftaranAsistenLabRoutes = new Hono();
 PendaftaranAsistenLabRoutes.get(
     "/",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("PENDAFTARAN_ASISTEN_LAB", "VIEW"),
     PendaftaranAsistenLabController.getAll
 );
 
 PendaftaranAsistenLabRoutes.get(
     "/asisten",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("PENDAFTARAN_ASISTEN_LAB", "VIEW"),
     PendaftaranAsistenLabController.getAllAsisten
 );
 
 PendaftaranAsistenLabRoutes.post(
     "/",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("PENDAFTARAN_ASISTEN_LAB", "CREATE"),
     PendaftaranAsistenLabValidation.validatePendaftaranAsistenLab,
     PendaftaranAsistenLabController.create
 );
@@ -27,6 +30,7 @@ PendaftaranAsistenLabRoutes.post(
 PendaftaranAsistenLabRoutes.put(
     "/:id",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("PENDAFTARAN_ASISTEN_LAB", "UPDATE"),
     PendaftaranAsistenLabValidation.validatePendaftaranAsistenLab,
     PendaftaranAsistenLabController.update
 );
@@ -34,6 +38,7 @@ PendaftaranAsistenLabRoutes.put(
 PendaftaranAsistenLabRoutes.put(
     "/:id/acceptance",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("PENERIMAAN_ASISTEN_LAB", "ACCEPTED"),
     PendaftaranAsistenLabValidation.validatePenerimaanAsistenLab,
     PendaftaranAsistenLabController.penerimaanAsistenLab
 );
@@ -41,6 +46,7 @@ PendaftaranAsistenLabRoutes.put(
 PendaftaranAsistenLabRoutes.put(
     "/:id/assignment",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "ASSIGN_ASISTEN_LAB"),
     PendaftaranAsistenLabValidation.validateAssignAsistenLab,
     PendaftaranAsistenLabController.assignAsistenLab
 );

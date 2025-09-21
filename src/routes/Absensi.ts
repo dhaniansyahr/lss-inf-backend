@@ -7,18 +7,21 @@ const AbsensiRoutes = new Hono();
 AbsensiRoutes.get(
     "/today",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("ABSENSI", "VIEW"),
     AbsensiController.getTodaySchedule
 );
 
 AbsensiRoutes.post(
     "/record",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("ABSENSI", "CREATE"),
     AbsensiController.create
 );
 
 AbsensiRoutes.get(
     "/:id/list",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("ABSENSI", "VIEW"),
     AbsensiController.getById
 );
 

@@ -28,7 +28,7 @@ AclRoutes.get(
 AclRoutes.post(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "create"),
+    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "CREATE"),
     AclValidation.validateAclCreate,
     AclController.create
 );
@@ -36,7 +36,7 @@ AclRoutes.post(
 AclRoutes.put(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "update"),
+    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "UPDATE"),
     AclValidation.validateUpdateAcl,
     AclController.update
 );

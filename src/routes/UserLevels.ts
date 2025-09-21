@@ -8,21 +8,21 @@ const UserLevelsRoutes = new Hono();
 UserLevelsRoutes.get(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "read"),
+    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "VIEW"),
     UserLevelsController.getAll
 );
 
 UserLevelsRoutes.get(
     "/:id",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "read"),
+    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "VIEW"),
     UserLevelsController.getById
 );
 
 UserLevelsRoutes.post(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "create"),
+    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "CREATE"),
     UserLevelsValidation.validateUserLevels,
     UserLevelsController.create
 );
@@ -30,7 +30,7 @@ UserLevelsRoutes.post(
 UserLevelsRoutes.put(
     "/:id",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "update"),
+    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "UPDATE"),
     UserLevelsValidation.validateUserLevels,
     UserLevelsController.update
 );
@@ -38,7 +38,7 @@ UserLevelsRoutes.put(
 UserLevelsRoutes.delete(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "delete"),
+    AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "DELETE"),
     UserLevelsController.deleteByIds
 );
 

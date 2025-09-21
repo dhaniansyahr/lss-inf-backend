@@ -57,8 +57,12 @@ export async function seedAcl(prisma: PrismaClient) {
                     ],
                 },
                 {
-                    subject: "ASISTEN_LAB",
-                    action: ["VIEW", "CREATE", "UPDATE", "ACCEPTED"],
+                    subject: "PENDAFTARAN_ASISTEN_LAB",
+                    action: ["VIEW", "CREATE", "UPDATE"],
+                },
+                {
+                    subject: "PENERIMAAN_ASISTEN_LAB",
+                    action: ["VIEW", "ACCEPTED"],
                 },
                 {
                     subject: "ROLE_MANAGEMENT",
@@ -67,6 +71,10 @@ export async function seedAcl(prisma: PrismaClient) {
                 {
                     subject: "USER_MANAGEMENT",
                     action: ["VIEW", "CREATE", "UPDATE", "DELETE"],
+                },
+                {
+                    subject: "ABSENSI",
+                    action: ["VIEW", "CREATE"],
                 },
             ],
         },

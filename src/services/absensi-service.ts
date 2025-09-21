@@ -424,9 +424,12 @@ export async function getById(id: string): Promise<ServiceResponse<{}>> {
             where: {
                 jadwalId: id,
             },
+            orderBy: {
+                pertemuan: "asc", // Mengurutkan berdasarkan nomor pertemuan
+            },
         });
 
-        if (!meetings)
+        if (!meetings || meetings.length === 0)
             return BadRequestWithMessage("Pertemuan Tidak Ditemukan!");
 
         const jadwal = await prisma.jadwal.findUnique({
@@ -456,40 +459,126 @@ export async function getById(id: string): Promise<ServiceResponse<{}>> {
 
         if (!jadwal) return BadRequestWithMessage("Jadwal Tidak Ditemukan!");
 
+        // Ambil semua data absensi untuk meetings yang ada
+        const absensiData = await prisma.absensi.findMany({
+            where: {
+                meetingId: {
+                    in: meetings.map((meeting) => meeting.id),
+                },
+            },
+            include: {
+                meeting: true,
+            },
+        });
+
+        // Helper function untuk membuat object meeting dengan kehadiran
+        const createMeetingAttendance = (
+            participantId: string,
+            participantType: "DOSEN" | "ASISTEN_LAB" | "MAHASISWA"
+        ) => {
+            const meetingsObj: any = {};
+
+            meetings.forEach((meeting) => {
+                let attendance = null;
+
+                if (participantType === "DOSEN") {
+                    attendance = absensiData.find(
+                        (abs) =>
+                            abs.meetingId === meeting.id &&
+                            abs.dosenId === participantId
+                    );
+                } else {
+                    // Untuk mahasiswa dan asisten lab
+                    attendance = absensiData.find(
+                        (abs) =>
+                            abs.meetingId === meeting.id &&
+                            abs.mahasiswaId === participantId
+                    );
+                }
+
+                // Buat properti dinamis berdasarkan nomor pertemuan
+                meetingsObj[`pertemuan${meeting.pertemuan}Id`] = meeting.id;
+                meetingsObj[`pertemuan${meeting.pertemuan}`] =
+                    attendance?.isPresent || false;
+            });
+
+            return meetingsObj;
+        };
+
         const participants: Participats[] = [];
 
+        // Tambahkan dosen dengan data kehadiran
         jadwal.jadwalDosen.forEach((item) => {
             participants.push({
                 id: item.dosen.id,
                 name: item.dosen.nama,
                 noIdentitas: item.dosen.nip,
                 type: "DOSEN",
+                meetings: createMeetingAttendance(item.dosen.id, "DOSEN"),
             });
         });
 
+        // Tambahkan asisten lab dengan data kehadiran
         jadwal.jadwalAsistenLab.forEach((item) => {
             participants.push({
-                id: item.asistenLab.id,
+                id: item.asistenLab.mahasiswa.id, // Gunakan ID mahasiswa karena absensi merujuk ke mahasiswaId
                 name: item.asistenLab.mahasiswa.nama,
                 noIdentitas: item.asistenLab.mahasiswa.npm,
                 type: "ASISTEN_LAB",
+                meetings: createMeetingAttendance(
+                    item.asistenLab.mahasiswa.id,
+                    "ASISTEN_LAB"
+                ),
             });
         });
 
+        // Tambahkan mahasiswa dengan data kehadiran
         jadwal.jadwalMahasiswa.forEach((item) => {
             participants.push({
                 id: item.mahasiswa.id,
                 name: item.mahasiswa.nama,
                 noIdentitas: item.mahasiswa.npm,
                 type: "MAHASISWA",
+                meetings: createMeetingAttendance(
+                    item.mahasiswa.id,
+                    "MAHASISWA"
+                ),
             });
         });
+
+        // Statistik kehadiran (opsional)
+        const attendanceStats = {
+            totalMeetings: meetings.length,
+            participantStats: participants.map((participant) => {
+                const meetingsKeys = Object.keys(participant.meetings);
+                const attendanceKeys = meetingsKeys.filter(
+                    (key) => !key.includes("Id")
+                );
+                const presentCount = attendanceKeys.filter(
+                    (key) => participant.meetings[key] === true
+                ).length;
+
+                return {
+                    id: participant.id,
+                    name: participant.name,
+                    type: participant.type,
+                    attendanceRate:
+                        attendanceKeys.length > 0
+                            ? (
+                                  (presentCount / attendanceKeys.length) *
+                                  100
+                              ).toFixed(2)
+                            : "0.00",
+                };
+            }),
+        };
 
         return {
             status: true,
             data: {
-                meetings,
+                // meetings,
                 participants,
+                stats: attendanceStats, // Tambahan statistik kehadiran
             },
         };
     } catch (err) {

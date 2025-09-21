@@ -7,6 +7,7 @@ const DashboardRoutes = new Hono();
 DashboardRoutes.get(
     "/summary-card",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("DASHBOARD", "VIEW"),
     DashboardController.getSummaryCard
 );
 

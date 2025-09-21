@@ -8,13 +8,14 @@ const JadwalRoutes = new Hono();
 JadwalRoutes.get(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("JADWAL", "read"),
+    AuthMiddleware.checkAccess("JADWAL", "VIEW"),
     JadwalController.getAll
 );
 
 JadwalRoutes.post(
     "/",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "CREATE"),
     JadwalValidation.validateJadwal,
     JadwalController.create
 );
@@ -28,35 +29,43 @@ JadwalRoutes.get(
 JadwalRoutes.post(
     "/bulk-upload",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "CREATE"),
     JadwalController.bulkUploadTheorySchedule
 );
 
 JadwalRoutes.post(
     "/generate",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "GENERATE"),
     JadwalController.generateSchedule
 );
 
-JadwalRoutes.get("/:id", AuthMiddleware.checkJwt, JadwalController.getById);
-
 JadwalRoutes.get(
-    "/:id/list-meeting",
+    "/:id",
     AuthMiddleware.checkJwt,
-    JadwalController.getListMeetings
+    AuthMiddleware.checkAccess("JADWAL", "VIEW"),
+    JadwalController.getById
 );
 
 JadwalRoutes.put(
     "/:id",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "UPDATE"),
     JadwalValidation.validateJadwal,
     JadwalController.update
 );
 
-JadwalRoutes.delete("/", AuthMiddleware.checkJwt, JadwalController.deleteAll);
+JadwalRoutes.delete(
+    "/",
+    AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "DELETE"),
+    JadwalController.deleteAll
+);
 
 JadwalRoutes.put(
     "/:id/meeting",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "UPDATE_MEETING"),
     JadwalValidation.validateUpdateMeeting,
     JadwalController.updateMeeting
 );
@@ -64,12 +73,14 @@ JadwalRoutes.put(
 JadwalRoutes.put(
     "/assign-mahasiswa/:id/manual",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "ASSIGN_MAHASISWA"),
     JadwalController.manualAssignMahasiswa
 );
 
 JadwalRoutes.put(
     "/assign-mahasiswa/:id/bulk-upload",
     AuthMiddleware.checkJwt,
+    AuthMiddleware.checkAccess("JADWAL", "ASSIGN_MAHASISWA"),
     JadwalController.bulkUploadMahasiswa
 );
 
