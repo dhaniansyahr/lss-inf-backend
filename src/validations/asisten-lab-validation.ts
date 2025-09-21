@@ -1,7 +1,6 @@
 import { Context, Next } from "hono";
 import { response_bad_request } from "$utils/response.utils";
 import { ErrorStructure, generateErrorStructure } from "./helper";
-import { prisma } from "$utils/prisma.utils";
 import { ASISTEN_LAB_STATUS, NILAI_MATAKULIAH } from "@prisma/client";
 import {
     AssignAsistenLabDTO,
@@ -21,31 +20,9 @@ export async function validatePendaftaranAsistenLab(c: Context, next: Next) {
             )
         );
 
-    const mahasiswaExist = await prisma.mahasiswa.findUnique({
-        where: {
-            id: data.mahasiswaId,
-        },
-    });
-
-    if (!mahasiswaExist)
-        return invalidFields.push(
-            generateErrorStructure("mahasiswaId", "mahasiswaId tidak ditemukan")
-        );
-
     if (!data.jadwalId)
         invalidFields.push(
             generateErrorStructure("jadwalId", "jadwalId tidak boleh kosong")
-        );
-
-    const jadwalExist = await prisma.jadwal.findUnique({
-        where: {
-            id: data.jadwalId,
-        },
-    });
-
-    if (!jadwalExist)
-        return invalidFields.push(
-            generateErrorStructure("jadwalId", "Jadwal tidak ditemukan")
         );
 
     if (!data.nilaiTeori)

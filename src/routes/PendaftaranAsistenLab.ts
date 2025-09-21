@@ -20,7 +20,7 @@ PendaftaranAsistenLabRoutes.get(
 );
 
 PendaftaranAsistenLabRoutes.post(
-    "/",
+    "/request",
     AuthMiddleware.checkJwt,
     AuthMiddleware.checkAccess("PENDAFTARAN_ASISTEN_LAB", "CREATE"),
     PendaftaranAsistenLabValidation.validatePendaftaranAsistenLab,

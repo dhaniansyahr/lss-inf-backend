@@ -32,26 +32,30 @@ export async function create(
             where: { id: data.jadwalId },
         });
 
-        if (!scheduleExists) return INVALID_ID_SERVICE_RESPONSE;
+        if (!scheduleExists) {
+            return BadRequestWithMessage("Jadwal tidak ditemukan!");
+        }
 
         const mahasiswaExists = await prisma.mahasiswa.findUnique({
             where: { id: data.mahasiswaId },
         });
 
-        if (!mahasiswaExists) return INVALID_ID_SERVICE_RESPONSE;
+        if (!mahasiswaExists) {
+            return BadRequestWithMessage("Mahasiswa tidak ditemukan!");
+        }
 
         // Check Registrations
         const registrations = await prisma.pendaftaranAsistenLab.findMany({
             where: {
-                mahasiswaId: scheduleExists.matakuliahId,
                 jadwalId: data.jadwalId,
             },
         });
 
-        if (registrations.length > 0)
+        if (registrations.length > 0) {
             return BadRequestWithMessage(
                 "Pendaftaran anda sudah ada pada jadwal ini!"
             );
+        }
 
         const pendaftaranAsistenLab = await prisma.pendaftaranAsistenLab.create(
             {
@@ -63,7 +67,7 @@ export async function create(
                     nilaiTeori: data.nilaiTeori as NILAI_MATAKULIAH,
                     nilaiPraktikum: data.nilaiPraktikum as NILAI_MATAKULIAH,
                     nilaiAkhir: data.nilaiAkhir as NILAI_MATAKULIAH,
-                    keterangan: data.keterangan ?? null,
+                    keterangan: data.keterangan ?? "",
                 },
             }
         );

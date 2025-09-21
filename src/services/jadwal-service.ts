@@ -562,72 +562,187 @@ export async function bulkUploadTheory(file: File) {
             );
         }
 
-        const results: Jadwal[] = [];
+        // Filter only theory courses first
+        const theoryData = excelData.filter((data) => {
+            // Assuming theory courses don't have "PRAKTIKUM" in the name
+            return !data.Nama.toUpperCase().includes("PRAKTIKUM");
+        });
 
-        for (const data of excelData) {
-            const { matakuliah } = await findOrCreateMatakuliah(
-                data.Kode,
-                data.Nama
+        if (theoryData.length === 0) {
+            return BadRequestWithMessage(
+                "Tidak ada jadwal teori yang ditemukan dalam file!"
             );
-            const { ruangan } = await findOrCreateRuangan(data.Ruang, "-");
+        }
+
+        // Batch process all entities first
+        const uniqueMatakuliah = new Map<
+            string,
+            { kode: string; nama: string }
+        >();
+        const uniqueRuangan = new Set<string>();
+        const uniqueShifts = new Map<
+            string,
+            { startTime: string; endTime: string }
+        >();
+        const uniqueDosen = new Map<
+            string,
+            { name: string; nip: string; email: string }
+        >();
+
+        // Collect unique entities
+        theoryData.forEach((data) => {
+            uniqueMatakuliah.set(data.Kode, {
+                kode: data.Kode,
+                nama: data.Nama,
+            });
+            uniqueRuangan.add(data.Ruang);
 
             const timeRange = data.Waktu.split("-");
             const startTime = timeRange[0];
             const endTime = timeRange[1];
-
-            const { shift } = await findOrCreateShift(startTime, endTime);
+            uniqueShifts.set(`${startTime}-${endTime}`, { startTime, endTime });
 
             const classCoordinatorName = data["Koordinator Kelas"].trim();
-            const classCoordinatorNip = data.NIP_KOOR_KElAS
-                ? data.NIP_KOOR_KElAS.trim()
-                : data.NIP_KOOR_KElAS;
+            const classCoordinatorNip =
+                data.NIP_KOOR_KElAS?.trim() || generateNipDosen();
 
-            const dosenName = classCoordinatorName;
-            const dosenNip = classCoordinatorNip
-                ? classCoordinatorNip
-                : generateNipDosen();
-
-            const splitGelar = dosenName.split(",");
+            const splitGelar = classCoordinatorName.split(",");
             const nameWithoutGelar = splitGelar[0].trim();
             const splitIfMoreThanOneWord = nameWithoutGelar.split(" ");
             const joinWithUnderScore = splitIfMoreThanOneWord.join("_");
             const email = joinWithUnderScore + "@usk.ac.id";
 
-            const { dosen } = await findOrCreateDosen(
-                dosenName,
-                dosenNip,
-                email
-            );
+            uniqueDosen.set(classCoordinatorName, {
+                name: classCoordinatorName,
+                nip: classCoordinatorNip,
+                email,
+            });
+        });
 
-            if (matakuliah.isTeori) {
+        // Batch create/find entities
+        const [matakuliahResults, ruanganResults, shiftResults, dosenResults] =
+            await Promise.all([
+                // Create/find matakuliah
+                Promise.all(
+                    Array.from(uniqueMatakuliah.values()).map(
+                        ({ kode, nama }) => findOrCreateMatakuliah(kode, nama)
+                    )
+                ),
+                // Create/find ruangan
+                Promise.all(
+                    Array.from(uniqueRuangan).map((ruang) =>
+                        findOrCreateRuangan(ruang, "-")
+                    )
+                ),
+                // Create/find shifts
+                Promise.all(
+                    Array.from(uniqueShifts.values()).map(
+                        ({ startTime, endTime }) =>
+                            findOrCreateShift(startTime, endTime)
+                    )
+                ),
+                // Create/find dosen
+                Promise.all(
+                    Array.from(uniqueDosen.values()).map(
+                        ({ name, nip, email }) =>
+                            findOrCreateDosen(name, nip, email)
+                    )
+                ),
+            ]);
+
+        // Create lookup maps
+        const matakuliahMap = new Map<string, any>();
+        matakuliahResults.forEach(({ matakuliah }) => {
+            matakuliahMap.set(matakuliah.kode, matakuliah);
+        });
+
+        const ruanganMap = new Map<string, any>();
+        ruanganResults.forEach(({ ruangan }) => {
+            ruanganMap.set(ruangan.nama, ruangan);
+        });
+
+        const shiftMap = new Map<string, any>();
+        shiftResults.forEach(({ shift }) => {
+            shiftMap.set(`${shift.startTime}-${shift.endTime}`, shift);
+        });
+
+        const dosenMap = new Map<string, any>();
+        dosenResults.forEach(({ dosen }) => {
+            const splitGelar = dosen.nama.split(",");
+            const nameWithoutGelar = splitGelar[0].trim();
+            dosenMap.set(nameWithoutGelar, dosen);
+        });
+
+        // Prepare batch data
+        const jadwalData: any[] = [];
+        const jadwalDosenData: any[] = [];
+
+        theoryData.forEach((data) => {
+            const matakuliah = matakuliahMap.get(data.Kode);
+            const ruangan = ruanganMap.get(data.Ruang);
+            const timeRange = data.Waktu.split("-");
+            const shift = shiftMap.get(`${timeRange[0]}-${timeRange[1]}`);
+
+            const classCoordinatorName = data["Koordinator Kelas"].trim();
+            const splitGelar = classCoordinatorName.split(",");
+            const nameWithoutGelar = splitGelar[0].trim();
+            const dosen = dosenMap.get(nameWithoutGelar);
+
+            if (matakuliah && matakuliah.isTeori && ruangan && shift && dosen) {
                 const scheduleId = ulid();
                 const hari =
                     data.Hari.toUpperCase() === "-"
                         ? HARI.SENIN
                         : (data.Hari.toUpperCase() as HARI);
 
-                const schedule = await prisma.jadwal.create({
-                    data: {
-                        id: scheduleId,
-                        matakuliahId: matakuliah.id,
-                        ruanganId: ruangan.id,
-                        shiftId: shift.id,
-                        kelas: data.Kelas,
-                        hari: hari,
-                        semester: academicPeriod.semester,
-                        tahun: academicPeriod.year,
-                        jadwalDosen: {
-                            create: {
-                                id: ulid(),
-                                dosenId: dosen.id,
-                            },
-                        },
-                    },
+                jadwalData.push({
+                    id: scheduleId,
+                    matakuliahId: matakuliah.id,
+                    ruanganId: ruangan.id,
+                    shiftId: shift.id,
+                    kelas: data.Kelas,
+                    hari: hari,
+                    semester: academicPeriod.semester,
+                    tahun: academicPeriod.year,
                 });
 
-                results.push(schedule);
+                jadwalDosenData.push({
+                    id: ulid(),
+                    jadwalId: scheduleId,
+                    dosenId: dosen.id,
+                });
             }
-        }
+        });
+
+        // Batch insert using transaction
+        const results = await prisma.$transaction(async (tx) => {
+            // Insert jadwal in batch
+            await tx.jadwal.createMany({
+                data: jadwalData,
+            });
+
+            // Insert jadwal dosen in batch
+            await tx.jadwalDosen.createMany({
+                data: jadwalDosenData,
+            });
+
+            // Return created jadwal data
+            return await tx.jadwal.findMany({
+                where: {
+                    id: { in: jadwalData.map((j) => j.id) },
+                },
+                include: {
+                    matakuliah: true,
+                    ruangan: true,
+                    shift: true,
+                    jadwalDosen: {
+                        include: {
+                            dosen: true,
+                        },
+                    },
+                },
+            });
+        });
 
         return {
             status: true,
