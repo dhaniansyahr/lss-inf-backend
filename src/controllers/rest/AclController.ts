@@ -42,8 +42,9 @@ export async function getByUserLevelId(c: Context): Promise<TypedResponse> {
 
 export async function update(c: Context): Promise<TypedResponse> {
     const data: AclDTO = await c.req.json();
+    const id = c.req.param("id");
 
-    const serviceResponse = await AclService.update(data);
+    const serviceResponse = await AclService.update(id, data);
 
     if (!serviceResponse.status) {
         return handleServiceErrorWithResponse(c, serviceResponse);

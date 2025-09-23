@@ -112,7 +112,19 @@ export async function getAll(
         }
 
         const [pendaftaranAsistenLab, totalData] = await Promise.all([
-            prisma.pendaftaranAsistenLab.findMany(usedFilters),
+            prisma.pendaftaranAsistenLab.findMany({
+                ...usedFilters,
+                include: {
+                    mahasiswa: true,
+                    jadwal: {
+                        include: {
+                            ruangan: true,
+                            shift: true,
+                        },
+                    },
+                    matakuliah: true,
+                },
+            }),
             prisma.pendaftaranAsistenLab.count({
                 where: usedFilters.where,
             }),

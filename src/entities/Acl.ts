@@ -1,9 +1,6 @@
 export interface AclDTO {
-    roleName: string;
-    permissions: {
-        subject: string;
-        action: string[];
-    }[];
+    name: string;
+    enabledFeatures: Record<string, boolean>;
 }
 
 export interface CheckFeatureAccessDTO {

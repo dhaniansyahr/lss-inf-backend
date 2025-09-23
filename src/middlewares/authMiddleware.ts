@@ -42,8 +42,8 @@ export function checkAccess(featureName: string, action: string) {
         // Then, get the action ID from the action name and feature ID
         const actionRecord = await prisma.actions.findUnique({
             where: {
-                featureId_name: {
-                    featureId: feature.id,
+                featureName_name: {
+                    featureName,
                     name: action,
                 },
             },
@@ -57,9 +57,9 @@ export function checkAccess(featureName: string, action: string) {
         // Now check if the user has access using the IDs
         const mappingExist = await prisma.acl.findUnique({
             where: {
-                featureId_actionId_userLevelId: {
-                    actionId: actionRecord.id,
-                    featureId: feature.id,
+                featureName_actionName_userLevelId: {
+                    actionName: action,
+                    featureName,
                     userLevelId: user.userLevelId,
                 },
             },

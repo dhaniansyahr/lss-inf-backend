@@ -34,10 +34,9 @@ AclRoutes.post(
 );
 
 AclRoutes.put(
-    "/",
+    "/:id",
     AuthMiddleware.checkJwt,
     AuthMiddleware.checkAccess("ROLE_MANAGEMENT", "UPDATE"),
-    AclValidation.validateUpdateAcl,
     AclController.update
 );
 

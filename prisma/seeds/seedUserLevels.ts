@@ -9,9 +9,6 @@ export async function seedUserLevels(prisma: PrismaClient) {
         "DOSEN",
         "ASISTEN_LABORATORIUM",
         "MAHASISWA",
-        "OPERATOR_JURUSAN",
-        "OPERATOR_KEUANGAN",
-        "PIMPINAN_JURUSAN",
         "SUPER_ADMIN",
     ];
 

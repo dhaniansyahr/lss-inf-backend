@@ -32,6 +32,14 @@ export async function create(
             );
         }
 
+        const npmExist = await prisma.mahasiswa.findUnique({
+            where: { npm: data.npm },
+        });
+
+        if (npmExist) {
+            return BadRequestWithMessage("NPM sudah terdaftar");
+        }
+
         const hashedPassword = await bcrypt.hash(data.password, 12);
 
         const mahasiswa = await prisma.mahasiswa.create({

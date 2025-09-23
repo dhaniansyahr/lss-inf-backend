@@ -8,14 +8,14 @@ const PendaftaranAsistenLabRoutes = new Hono();
 PendaftaranAsistenLabRoutes.get(
     "/",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("PENDAFTARAN_ASISTEN_LAB", "VIEW"),
+    AuthMiddleware.checkAccess("PENERIMAAN_ASISTEN_LAB", "VIEW"),
     PendaftaranAsistenLabController.getAll
 );
 
 PendaftaranAsistenLabRoutes.get(
     "/asisten",
     AuthMiddleware.checkJwt,
-    AuthMiddleware.checkAccess("PENDAFTARAN_ASISTEN_LAB", "VIEW"),
+    AuthMiddleware.checkAccess("PENERIMAAN_ASISTEN_LAB", "VIEW"),
     PendaftaranAsistenLabController.getAllAsisten
 );
 

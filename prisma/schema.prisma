@@ -92,29 +92,29 @@ model Features {
 }
 
 model Actions {
-  id        String   @id
-  name      String
-  featureId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id
+  name        String
+  featureName String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  feature Features @relation(fields: [featureId], references: [id])
+  feature Features @relation(fields: [featureName], references: [name])
 
-  @@unique([featureId, name])
+  @@unique([featureName, name])
 }
 
 model Acl {
   id          String   @id
-  featureId   String
-  actionId    String
+  featureName String
+  actionName  String
   userLevelId String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  feature   Features   @relation(fields: [featureId], references: [id])
+  feature   Features   @relation(fields: [featureName], references: [name], onDelete: Cascade)
   userLevel UserLevels @relation(fields: [userLevelId], references: [id])
 
-  @@unique([featureId, actionId, userLevelId])
+  @@unique([featureName, actionName, userLevelId])
 }
 
 // Academic Entities

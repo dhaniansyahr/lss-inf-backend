@@ -12,93 +12,43 @@ import { ulid } from "ulid";
 import { UserJWTDAO } from "$entities/User";
 
 export type CreateResponse = Acl | {};
+
 export async function create(
     data: AclDTO
 ): Promise<ServiceResponse<CreateResponse>> {
     try {
-        // Create or find user level first
-        let userLevel = await prisma.userLevels.findFirst({
-            where: {
-                name: data.roleName,
-            },
-            select: { id: true, name: true },
-        });
+        const userLevelId = ulid();
 
-        if (!userLevel) {
-            userLevel = await prisma.userLevels.create({
-                data: {
+        const enabledFeatureKeys = Object.keys(data.enabledFeatures);
+
+        const mappings: Prisma.AclCreateManyInput[] = enabledFeatureKeys
+            .filter((key) => data.enabledFeatures[key] === true)
+            .map((enabledFeature) => {
+                const [featureName, actionName] = enabledFeature.split(".");
+                return {
                     id: ulid(),
-                    name: data.roleName,
-                },
-                select: { id: true, name: true },
+                    featureName,
+                    actionName,
+                    userLevelId,
+                };
             });
-        }
 
-        // Get all features and actions for validation
-        const featuresWithActions = await prisma.features.findMany({
-            include: {
-                actions: {
-                    select: {
-                        id: true,
-                        name: true,
-                    },
-                },
-            },
-        });
-
-        const featureMap = new Map(featuresWithActions.map((f) => [f.name, f]));
-        const aclCreateData: Prisma.AclCreateManyInput[] = [];
-
-        // Validate and prepare ACL data
-        for (const permission of data.permissions) {
-            const feature = featureMap.get(permission.subject);
-            if (!feature) {
-                return BadRequestWithMessage(
-                    `Feature '${permission.subject}' not found`
-                );
-            }
-
-            const actionMap = new Map(
-                feature.actions.map((a) => [a.name, a.id])
-            );
-
-            for (const actionName of permission.action) {
-                const actionId = actionMap.get(actionName);
-                if (!actionId) {
-                    return BadRequestWithMessage(
-                        `Action '${actionName}' not found for feature '${permission.subject}'`
-                    );
-                }
-
-                aclCreateData.push({
-                    id: ulid(),
-                    featureId: feature.id,
-                    actionId: actionId,
-                    userLevelId: userLevel.id,
-                });
-            }
-        }
-
-        // Execute transaction
         const result = await prisma.$transaction(async (tx) => {
-            // Delete existing ACL entries for this user level
-            await tx.acl.deleteMany({
-                where: {
-                    userLevelId: userLevel!.id,
-                },
+            const userLevel = await tx.userLevels.create({
+                data: { id: userLevelId, name: data.name },
             });
 
-            // Create new ACL entries
-            await tx.acl.createMany({
-                data: aclCreateData,
+            const acl = await tx.acl.createMany({
+                data: mappings.map((access) => ({
+                    ...access,
+                    userLevelId,
+                })),
             });
 
-            // Return created ACL entries
-            return tx.acl.findMany({
-                where: {
-                    userLevelId: userLevel!.id,
-                },
-            });
+            return {
+                userLevel,
+                acl,
+            };
         });
 
         return {
@@ -115,33 +65,36 @@ export async function getAclByUserLevelId(
     userLevelId: string
 ): Promise<ServiceResponse<{}>> {
     try {
+        const userLevel = await prisma.userLevels.findUnique({
+            where: { id: userLevelId },
+        });
+
+        if (!userLevel) return INVALID_ID_SERVICE_RESPONSE;
+
         const acl = await prisma.acl.findMany({
             where: {
                 userLevelId,
             },
-            include: {
-                feature: {
-                    include: {
-                        actions: {
-                            select: {
-                                name: true,
-                            },
-                        },
-                    },
-                },
-            },
         });
 
-        if (!acl) return INVALID_ID_SERVICE_RESPONSE;
+        if (acl.length === 0)
+            return BadRequestWithMessage("Acl tidak ditemukan!");
 
-        const formattedResponse = acl.map((item) => ({
-            featureName: item.feature.name,
-            actions: item.feature.actions.map((action) => action.name),
-        }));
+        const enabledFeatures = acl.reduce(
+            (featureMap: Record<string, boolean>, mapping) => {
+                const featureKey = `${mapping.featureName}.${mapping.actionName}`;
+                featureMap[featureKey] = true;
+                return featureMap;
+            },
+            {}
+        );
 
         return {
             status: true,
-            data: formattedResponse,
+            data: {
+                name: userLevel.name,
+                enabledFeatures,
+            },
         };
     } catch (err) {
         Logger.error(`AclService.getAclByUserLevelId : ${err}`);
@@ -150,126 +103,90 @@ export async function getAclByUserLevelId(
 }
 
 export async function update(
+    id: string,
     data: AclDTO
 ): Promise<ServiceResponse<CreateResponse>> {
     try {
-        const userLevel = await prisma.userLevels.findFirst({
-            where: { name: data.roleName },
-            select: { id: true },
+        const userLevel = await prisma.userLevels.findUnique({
+            where: { id },
         });
 
         if (!userLevel) {
-            return BadRequestWithMessage("Role tidak ditemukan!");
+            return BadRequestWithMessage("User Level tidak ditemukan!");
         }
 
-        // Get features and actions for validation
-        const featuresWithActions = await prisma.features.findMany({
-            include: {
-                actions: {
-                    select: {
-                        id: true,
-                        name: true,
+        const enabledFeatureKeys = Object.keys(data.enabledFeatures);
+        const createMappings: any[] = [];
+        const deleteMappings: any[] = [];
+
+        for (const enabledFeature of enabledFeatureKeys) {
+            const [featureName, actionName] = enabledFeature.split(".");
+
+            // Using repository layer to verify feature-action existence
+            const actionExists = await prisma.actions.findUnique({
+                where: {
+                    featureName_name: {
+                        name: actionName,
+                        featureName,
                     },
                 },
-            },
-        });
+            });
+            // Only proceed if the action exists for this feature
+            if (actionExists) {
+                const existingMapping = await prisma.acl.findUnique({
+                    where: {
+                        featureName_actionName_userLevelId: {
+                            featureName,
+                            actionName,
+                            userLevelId: userLevel.id,
+                        },
+                    },
+                });
 
-        const featureMap = new Map(featuresWithActions.map((f) => [f.name, f]));
-
-        // Get existing ACL permissions
-        const existingAcls = await prisma.acl.findMany({
-            where: { userLevelId: userLevel.id },
-            select: { featureId: true, actionId: true },
-        });
-
-        const existingPermissionKeys = new Set(
-            existingAcls.map((acl) => `${acl.featureId}:${acl.actionId}`)
-        );
-
-        // Prepare new permissions data
-        const newAclData: Prisma.AclCreateManyInput[] = [];
-        const newPermissionKeys = new Set<string>();
-
-        for (const permission of data.permissions) {
-            const feature = featureMap.get(permission.subject);
-            if (!feature) {
-                return BadRequestWithMessage(
-                    `Feature '${permission.subject}' not found`
-                );
-            }
-
-            const actionMap = new Map(
-                feature.actions.map((a) => [a.name, a.id])
-            );
-
-            for (const actionName of permission.action) {
-                const actionId = actionMap.get(actionName);
-                if (!actionId) {
-                    return BadRequestWithMessage(
-                        `Action '${actionName}' not found for feature '${permission.subject}'`
-                    );
+                if (
+                    data.enabledFeatures[enabledFeature] === false &&
+                    existingMapping
+                ) {
+                    deleteMappings.push({
+                        featureName,
+                        actionName,
+                        userLevelId: userLevel.id,
+                    });
                 }
 
-                const permissionKey = `${feature.id}:${actionId}`;
-                newPermissionKeys.add(permissionKey);
-
-                // Only add if it doesn't already exist
-                if (!existingPermissionKeys.has(permissionKey)) {
-                    newAclData.push({
+                if (
+                    data.enabledFeatures[enabledFeature] === true &&
+                    !existingMapping
+                ) {
+                    createMappings.push({
                         id: ulid(),
-                        featureId: feature.id,
-                        actionId: actionId,
+                        featureName,
+                        actionName,
                         userLevelId: userLevel.id,
                     });
                 }
             }
         }
 
-        // Find permissions to remove
-        const permissionsToRemove = existingAcls.filter(
-            (acl) => !newPermissionKeys.has(`${acl.featureId}:${acl.actionId}`)
+        const deletedPromises = deleteMappings.map((mapping) =>
+            prisma.acl.delete({
+                where: {
+                    featureName_actionName_userLevelId: mapping,
+                },
+            })
         );
 
-        // Execute update in transaction
-        const result = await prisma.$transaction(async (tx) => {
-            let removedCount = 0;
-            let addedCount = 0;
+        const result = await prisma.$transaction([
+            prisma.acl.createMany({
+                data: createMappings,
+            }),
+            prisma.userLevels.update({
+                where: { id: userLevel.id },
+                data: { name: data.name },
+            }),
 
-            // Remove permissions that are no longer needed
-            if (permissionsToRemove.length > 0) {
-                const deleteResult = await tx.acl.deleteMany({
-                    where: {
-                        userLevelId: userLevel.id,
-                        OR: permissionsToRemove.map((perm) => ({
-                            featureId: perm.featureId,
-                            actionId: perm.actionId,
-                        })),
-                    },
-                });
-                removedCount = deleteResult.count;
-            }
-
-            // Add new permissions
-            if (newAclData.length > 0) {
-                await tx.acl.createMany({
-                    data: newAclData,
-                    skipDuplicates: true,
-                });
-                addedCount = newAclData.length;
-            }
-
-            // Get total permissions count
-            const totalPermissions = await tx.acl.count({
-                where: { userLevelId: userLevel.id },
-            });
-
-            return {
-                userLevelId: userLevel.id,
-                permissionsAdded: addedCount,
-                permissionsRemoved: removedCount,
-                totalPermissions,
-            };
-        });
+            ...deletedPromises,
+        ]);
 
         return {
             status: true,
@@ -329,46 +246,32 @@ export async function getAccess(
         if (!featureExists) return INVALID_ID_SERVICE_RESPONSE;
 
         // Find ACL
-        const aclExists = await prisma.acl.findFirst({
+        const enabledActions = await prisma.acl.findMany({
             where: {
+                featureName,
                 userLevelId: user.userLevelId,
-                featureId: featureExists.id,
             },
-            include: {
-                feature: {
-                    include: {
-                        actions: {
-                            select: {
-                                name: true,
-                            },
-                        },
-                    },
-                },
-            },
-        });
-
-        if (!aclExists) return INVALID_ID_SERVICE_RESPONSE;
-
-        const actions = await prisma.actions.findMany({
             select: {
-                name: true,
+                actionName: true,
             },
         });
 
-        if (!actions) return BadRequestWithMessage("Actions Tidak Ditemukan!");
+        if (!enabledActions) return INVALID_ID_SERVICE_RESPONSE;
 
-        // Format the response to have actions as boolean values
-        const actionNames = featureExists.actions.map((action) => action.name);
-        const formattedActions = actions.reduce((acc, action) => {
-            acc[action.name] = actionNames.includes(action.name);
-            return acc;
-        }, {} as Record<string, boolean>);
+        const enabledActionName = new Set(
+            enabledActions.map((action) => action.actionName)
+        );
+        const result: Record<string, boolean> = {};
+
+        for (const action of featureExists.actions) {
+            result[action.name] = enabledActionName.has(action.name);
+        }
 
         return {
             status: true,
             data: {
                 featureName: featureName,
-                actions: formattedActions,
+                actions: result,
             },
         };
     } catch (err) {
@@ -381,28 +284,27 @@ export async function getAvailableFeatures(
     user: UserJWTDAO
 ): Promise<ServiceResponse<{}>> {
     try {
-        const features = await prisma.acl.findMany({
+        const enabledFeatures = await prisma.acl.findMany({
             where: {
                 userLevelId: user.userLevelId,
             },
-            include: {
-                feature: {
-                    select: {
-                        name: true,
-                    },
-                },
+            select: {
+                featureName: true,
             },
-            distinct: ["featureId"],
         });
 
-        if (!features)
+        if (!enabledFeatures)
             return BadRequestWithMessage("Features Tidak Ditemukan!");
 
-        const formattedFeatures = features.map((acl) => acl.feature.name);
+        const enabledFeatureName = new Set(
+            enabledFeatures.map((feature) => feature.featureName)
+        );
+
+        const removeDuplicate = Array.from(enabledFeatureName);
 
         return {
             status: true,
-            data: formattedFeatures,
+            data: removeDuplicate,
         };
     } catch (err) {
         Logger.error(`AclService.getAvailableFeatures : ${err}`);
