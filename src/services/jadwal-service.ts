@@ -33,6 +33,7 @@ import { generateNipDosen } from "$utils/strings.utils";
 
 async function checkScheduleHasConflict(
     schedule: JadwalDTO,
+    dosenIds: string[],
     excludeScheduleId?: string // Optional parameter to exclude current schedule when updating
 ): Promise<OverrideJadwalDTO[]> {
     let overrideData: OverrideJadwalDTO[] = [];
@@ -88,7 +89,7 @@ async function checkScheduleHasConflict(
             semester: academicPeriod.semester,
             tahun: academicPeriod.year,
             jadwalDosen: {
-                some: { dosenId: { in: schedule.dosenIds } },
+                some: { dosenId: { in: dosenIds } },
             },
         },
         include: {
@@ -114,7 +115,7 @@ async function checkScheduleHasConflict(
     if (dosenSameDayAndShift) {
         // Get conflicting dosen names
         const conflictingDosen = dosenSameDayAndShift.jadwalDosen
-            .filter((jd) => schedule.dosenIds.includes(jd.dosenId))
+            .filter((jd) => dosenIds.includes(jd.dosenId))
             .map((jd) => jd.dosen.nama)
             .join(", ");
 
@@ -136,7 +137,7 @@ async function checkScheduleHasConflict(
             semester: academicPeriod.semester,
             tahun: academicPeriod.year,
             jadwalDosen: {
-                some: { dosenId: { in: schedule.dosenIds } },
+                some: { dosenId: { in: dosenIds } },
             },
         },
         include: {
@@ -161,7 +162,7 @@ async function checkScheduleHasConflict(
 
     if (combinedConflict) {
         const conflictingDosen = combinedConflict.jadwalDosen
-            .filter((jd) => schedule.dosenIds.includes(jd.dosenId))
+            .filter((jd) => dosenIds.includes(jd.dosenId))
             .map((jd) => jd.dosen.nama)
             .join(", ");
 
@@ -275,7 +276,7 @@ export async function create(
         if (!theoryData)
             return BadRequestWithMessage("Matakuliah teori tidak ditemukan!");
 
-        let dosenIds = data.dosenIds;
+        const dosenIds: string[] = [];
         if (dosenIds.length === 0) {
             const theoryScheduleExists = await prisma.jadwal.findFirst({
                 where: { matakuliahId: theoryData.id },
@@ -287,12 +288,12 @@ export async function create(
             if (!theoryScheduleExists)
                 return BadRequestWithMessage("Jadwal teori tidak ditemukan!");
 
-            dosenIds = theoryScheduleExists.jadwalDosen.map(
-                (dosen) => dosen.dosenId
-            );
+            theoryScheduleExists.jadwalDosen.forEach((dosen) => {
+                dosenIds.push(dosen.dosenId);
+            });
         }
 
-        const conflictData = await checkScheduleHasConflict(data);
+        const conflictData = await checkScheduleHasConflict(data, dosenIds);
 
         if (conflictData.length > 0 && !data.isOverride) {
             return {
@@ -470,6 +471,9 @@ export async function update(
 
         const scheduleExists = await prisma.jadwal.findUnique({
             where: { id },
+            include: {
+                jadwalDosen: true,
+            },
         });
 
         if (!scheduleExists) return INVALID_ID_SERVICE_RESPONSE;
@@ -501,7 +505,11 @@ export async function update(
         //         return BadRequestWithMessage("Jadwal teori tidak ditemukan!");
         // }
 
-        const conflictData = await checkScheduleHasConflict(data, id);
+        const dosenIds = scheduleExists.jadwalDosen.map(
+            (dosen) => dosen.dosenId
+        );
+
+        const conflictData = await checkScheduleHasConflict(data, dosenIds, id);
 
         if (conflictData.length > 0 && !data.isOverride) {
             return {

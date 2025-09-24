@@ -236,12 +236,20 @@ export async function penerimaanAsistenLab(
                 });
 
                 if (data.status === ASISTEN_LAB_STATUS.DISETUJUI) {
-                    await tx.asistenLab.create({
+                    const asistenLab = await tx.asistenLab.create({
                         data: {
                             id: ulid(),
                             mahasiswaId: assistAcceptance.mahasiswaId,
                             semester: assistAcceptance.mahasiswa.semester,
                             tahun: academicPeriod.year,
+                        },
+                    });
+
+                    await tx.jadwalAsistenLab.create({
+                        data: {
+                            id: ulid(),
+                            jadwalId: assistAcceptance.jadwalId,
+                            asistenLabId: asistenLab.id,
                         },
                     });
                 }

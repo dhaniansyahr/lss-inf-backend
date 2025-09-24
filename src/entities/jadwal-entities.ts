@@ -8,9 +8,6 @@ export interface JadwalDTO {
     isOverride: boolean;
     kelas: string;
     matakuliahId: string;
-    dosenIds: string[];
-    asistenLabIds?: string[];
-    mahasiswaIds?: string[];
 }
 
 export interface OverrideJadwalDTO {
