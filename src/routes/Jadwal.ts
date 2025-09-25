@@ -88,7 +88,7 @@ JadwalRoutes.get(
     "/:id/list-meeting",
     AuthMiddleware.checkJwt,
     AuthMiddleware.checkAccess("JADWAL", "ASSIGN_MAHASISWA"),
-    JadwalController.bulkUploadMahasiswa
+    JadwalController.getListMeetings
 );
 
 export default JadwalRoutes;
