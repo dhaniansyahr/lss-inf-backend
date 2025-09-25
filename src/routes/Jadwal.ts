@@ -84,7 +84,7 @@ JadwalRoutes.put(
     JadwalController.bulkUploadMahasiswa
 );
 
-JadwalRoutes.put(
+JadwalRoutes.get(
     "/:id/list-meeting",
     AuthMiddleware.checkJwt,
     AuthMiddleware.checkAccess("JADWAL", "ASSIGN_MAHASISWA"),
